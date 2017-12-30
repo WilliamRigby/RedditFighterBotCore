@@ -8,7 +8,7 @@ takes advantage of the wikipedia API, which is where we get the fighter's record
 
 
 
-____USAGE____________________________________________________________________________________________________________________________
+____________________________________USAGE_______________________________________________________________
 
 
 Make a reply to a thread in the r/boxing subreddit, in this format:
@@ -20,7 +20,7 @@ Make a reply to a thread in the r/boxing subreddit, in this format:
 - <row count> is an optional paramter for the number of fights to display and is an integer 0 < x < 150.  If the specified row count is
   too large, the number will automatically be scaled down to the largest number possible given the number of fighters requested.
 
-_______________________________________________________________________________________________________________________________________
+_______________________________________________________________________________________________________
 
 
 
@@ -28,13 +28,11 @@ ________________________________________________________________________________
 
 
 
-
-____TO-DO______________________________________________________________________________________________________________________________
-
+___________________________________TO-DO_______________________________________________________________
 
 - deploy to rpi
 
 - create a deployment script so I can deploy from my workstation to the pi programatically
 
 
-_______________________________________________________________________________________________________________________________________
+________________________________________________________________________________________________________
