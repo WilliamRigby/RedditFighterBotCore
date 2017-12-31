@@ -16,29 +16,7 @@ namespace RedditFighterBot
     {
         private static Regex RESregex = new Regex("\\[.*\\]");
 
-        private static Dictionary<char, char> CharMappings = new Dictionary<char, char>()
-        {
-            {'ã', 'a'},
-            {'á', 'a'},
-            {'à', 'a'},
-            {'â', 'a'},
-            {'ç', 'c'},
-            {'é', 'e'},
-            {'ê', 'e'},
-            {'í', 'i'},
-            {'ó', 'o'},
-            {'õ', 'o'},
-            {'ô', 'o'},
-            {'ú', 'u'},
-            {'ü', 'u'},
-            {'ñ', 'n'},
-        };
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="body"></param>
-        /// <returns>line of comment for request</returns>
+        
         public static string GetRequestStringFromComment(string body)
         {
 
@@ -119,59 +97,7 @@ namespace RedditFighterBot
             }
 
             return list;
-        }
-
-        /*this method attempts to take commonly user inputted fighter names and resolve them to more correct ones */
-        public static string FighterNameFixes(string fighter)
-        {
-            if (fighter.ToLower() == "julio cesar chavez" || fighter.ToLower() == "chavez")
-            {
-                return "Julio César Chávez";
-            }
-            else if (fighter.ToLower() == "julio cesar chavez jr." || fighter.ToLower() == "julio cesar chavez jr"
-                      || fighter.ToLower() == "julio cesar chavez, jr" || fighter.ToLower() == "julio cesar chavez jr.")
-            {
-                return "Julio César Chávez Jr.";
-            }
-            else if (fighter.ToLower() == "roy jones jr" || fighter.ToLower() == "roy jones, jr"
-                            || fighter.ToLower() == "roy jones jr." || fighter.ToLower() == "rjj")
-            {
-                return "Roy_Jones_Jr.";
-            }
-            else if (fighter.ToLower() == "hopkins")
-            {
-                return "Bernard Hopkins";
-            }
-            else if (fighter.ToLower() == "sergio martinez" || fighter.ToLower() == "sergio martínez")
-            {
-                return "Sergio_Martínez_(boxer)";
-            }
-            else if (fighter.ToLower() == "juan manuel marquez" || fighter.ToLower() == "juan marquez" || fighter.ToLower() == "marquez")
-            {
-                return "Juan_Manuel_Márquez";
-            }
-            else if (fighter.ToLower() == "sugar ray robinson" || fighter.ToLower() == "srr")
-            {
-                return "Sugar_Ray_Robinson";
-            }
-            else
-            {
-                return fighter;
-            }
-        }
-
-        public static List<string> ReplaceNonEnglishChars(List<string> fighters)
-        {
-            for (int i = 0; i < fighters.Count; i++)
-            {
-                foreach (var pair in CharMappings)
-                {
-                    fighters[i] = fighters[i].Replace(pair.Key, pair.Value);
-                }
-            }
-
-            return fighters;
-        }
+        }        
 
         public static string RemoveNumbers(string request)
         {
@@ -179,7 +105,7 @@ namespace RedditFighterBot
 
             foreach (char c in request)
             {
-                if (char.IsDigit(c) == false)
+                if (char.IsDigit(c) == false && c != '-')
                 {
                     temp += c;
                 }

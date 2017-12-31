@@ -6,6 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="RedditFighterBotCoreTests\**" />
+    <EmbeddedResource Remove="RedditFighterBotCoreTests\**" />
+    <None Remove="RedditFighterBotCoreTests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove=".gitignore" />
     <None Remove="README.txt" />
   </ItemGroup>

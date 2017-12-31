@@ -20,8 +20,6 @@ Make a reply to a thread in the r/boxing subreddit, in this format:
 - <row count> is an optional paramter for the number of fights to display and is an integer 0 < x < 150.  If the specified row count is
   too large, the number will automatically be scaled down to the largest number possible given the number of fighters requested.
 
-_______________________________________________________________________________________________________
-
 
 
 
@@ -33,6 +31,3 @@ ___________________________________TO-DO________________________________________
 - deploy to rpi
 
 - create a deployment script so I can deploy from my workstation to the pi programatically
-
-
-________________________________________________________________________________________________________
