@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RedditFighterBotCore.csproj" />
+    <ProjectReference Include="..\RedditFighterBotCore\RedditFighterBotCore.csproj" />
   </ItemGroup>
 
 </Project>
