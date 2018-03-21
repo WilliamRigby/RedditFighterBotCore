@@ -29,6 +29,7 @@ namespace RedditFighterBot
         private static string secret = null;
         private static string username = null;
         private static string password = null;
+        private static string redirect = null;
         private static readonly bool debug = true;
 
         private static ILog logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
@@ -36,16 +37,19 @@ namespace RedditFighterBot
 
         static void Main(string[] args)
         {
+
             var logRepo = LogManager.GetRepository(Assembly.GetEntryAssembly());
             log4net.Config.XmlConfigurator.Configure(logRepo, new FileInfo("app.config"));
 
+            Console.WriteLine("Application Start");
             logger.Debug("Application Start");
 
             try
             {
                 ReadPasswords();
-                
-                Authenticate();
+
+                reddit = new Reddit(new BotWebAgent(username, password, clientid, secret, redirect), false);
+                reddit.InitOrUpdateUserAsync().Wait();
 
                 logger.Debug("Logged in...");
                 Console.WriteLine("Logged in...");
@@ -54,6 +58,7 @@ namespace RedditFighterBot
             }
             catch (Exception e)
             {
+                Console.WriteLine(e);
                 logger.Debug(e);
                 System.Environment.Exit(1);
             }
@@ -61,6 +66,7 @@ namespace RedditFighterBot
             timer = new Timer(new TimerCallback(InfiniteLoopCallBack), null, 0, 0);
             System.Threading.Thread.Sleep(Timeout.Infinite);
         }
+
 
         private static void ReadPasswords()
         {
@@ -71,7 +77,7 @@ namespace RedditFighterBot
                 XmlDocument doc = new XmlDocument();
                 doc.LoadXml(file);
 
-                XmlNodeList nodeList = doc.SelectNodes("/accounts/account");
+                XmlNodeList nodeList = doc.SelectNodes("/config/accounts/account");
 
                 foreach (XmlNode node in nodeList)
                 {
@@ -83,6 +89,7 @@ namespace RedditFighterBot
                             secret = node.SelectSingleNode("secret").InnerText;
                             username = node.SelectSingleNode("username").InnerText;
                             password = node.SelectSingleNode("password").InnerText;
+                            redirect = node.SelectSingleNode("redirect").InnerText;
                         }                        
                     }
                     else
@@ -93,6 +100,7 @@ namespace RedditFighterBot
                             secret = node.SelectSingleNode("secret").InnerText;
                             username = node.SelectSingleNode("username").InnerText;
                             password = node.SelectSingleNode("password").InnerText;
+                            redirect = node.SelectSingleNode("redirect").InnerText;
                         }
                     }
                 }
@@ -102,6 +110,8 @@ namespace RedditFighterBot
                 throw e;
             }
         }
+
+
         private static void Authenticate()
         {
             try
@@ -139,70 +149,7 @@ namespace RedditFighterBot
                 throw e;
             }
         }
-                
-        private static List<string> BingSpellCheck(List<string> fighters)
-        {
-            for (int i = 0; i < fighters.Count; i++)
-            {
-                JEnumerable<JToken> results = QueryBing(fighters[i]);
-
-                try
-                {
-
-                    if (results.Count() > 0)
-                    {
-                        List<BingSpellCheckDTO> tokens = new List<BingSpellCheckDTO>();
-
-                        foreach (JToken result in results)
-                        {
-                            BingSpellCheckDTO token = result.ToObject<BingSpellCheckDTO>();
-                            tokens.Add(token);
-                        }
-
-                        foreach (BingSpellCheckDTO token in tokens)
-                        {
-                            fighters[i] = fighters[i].Replace(token.token, token.suggestions[0].suggestion);
-                        }
-                    }
-
-                    fighters[i] = textInfo.ToTitleCase(fighters[i]);
-                }
-                catch (Exception ex)
-                {
-                    logger.Debug(ex.Message);
-                    continue;
-                }
-            }
-
-            return fighters;
-        }
-
-        private static JEnumerable<JToken> QueryBing(string fighter)
-        {
-            string uri = BingSpellCheckAccessor.GenerateRequestUri(fighter);
-            string response = BingSpellCheckAccessor.SendRequestAsync(uri).Result;
-
-            JObject json = JObject.Parse(response);
-
-            JEnumerable<JToken> results;
-
-            try
-            {
-                results = json["flaggedTokens"].Children();
-            }
-            catch (Exception)
-            {
-                BingError token = json.ToObject<BingError>();
-
-                if (token.statusCode == 429)
-                {
-                    Thread.Sleep(1000);
-                    QueryBing(fighter);
-                }
-            }
-
-            return results;
-        }
+        
 
         private static void InfiniteLoopCallBack(object o)
         {
@@ -237,15 +184,18 @@ namespace RedditFighterBot
                             comment.SetAsReadAsync();
 
                             //log the comment body obvs
-                            logger.Debug(comment.Body);
+                            Console.WriteLine("Reuqest received: " + comment.Body);
+                            logger.Debug("Reuqest received: " + comment.Body);
 
                             //get the line of the comment body which is the actual request
                             string request_string = StringUtilities.GetRequestStringFromComment(comment.Body);
 
+                            
                             //if we cannot find a line of the comment that contains the bot's name, then continue
                             //this implies that this was probably just a regular comment reply, and not a request
                             if (request_string == null || request_string == "")
                             {
+                                logger.Debug("request string invalid: " + request_string);
                                 continue;
                             }
 
@@ -280,7 +230,7 @@ namespace RedditFighterBot
                             foreach (string fighter in fighters)
                             {
                                 WikiSearchResultDTO test = WikiAccessor.SearchWiki(fighter);
-
+                                                                
                                 try
                                 {
                                     wiki_checked_fighters.Add(test.title);
@@ -315,13 +265,15 @@ namespace RedditFighterBot
                             //iteratively create the reply string
                             foreach (string fighter in request.FighterNames)
                             {
-                                int index = WikiAccessor.GetIndex(fighter);
+                                
+                                int index = WikiAccessor.GetIndex(fighter);                                
 
                                 if (index != -1)
                                 {
                                     WikiAccessor.GetEntireTable(fighter, index);
                                 }
                             }
+                            
 
                             //create the reply object                        
                             if (WikiAccessor.Builder != null && WikiAccessor.Builder.ToString() != "")
@@ -329,13 +281,31 @@ namespace RedditFighterBot
                                 //send the reply
                                 SendReply(comment, WikiAccessor.Builder.ToString() + "\n\n^(I am a bot. This post was requested by " + comment.AuthorName + ")\n\n[^(Usage / FAQ)](http://redditfighterbotwebapp.azurewebsites.net/)");
                             }
-
+                            else
+                            {
+                                logger.Debug("Reply attempt failed due to empty StringBuilder");
+                            }
                         }
                     }
                 }               
+            }            
+            catch(RedditSharp.RedditHttpException e)
+            {
+                logger.Debug(e);
+                try
+                {
+                    ReadPasswords();
+                    Authenticate();
+                }
+                catch(Exception ex)
+                {
+                    logger.Debug(ex);
+                    System.Environment.Exit(1);
+                }
             }
             catch (Exception e)
             {
+                Console.WriteLine(e);
                 logger.Debug(e);                
             }
 
@@ -347,18 +317,17 @@ namespace RedditFighterBot
         {
             try
             {
-                comment.ReplyAsync(reply);
+                comment.ReplyAsync(reply).Wait();
+                logger.Debug("Reply successful!");
             }
             catch (RateLimitException rate)
             {
-                logger.Debug("Reply rate limit exceeded");
                 logger.Debug(rate.Message);
                 Thread.Sleep(45000);
                 SendReply(comment, reply);
             }
             catch (Exception e)
             {
-                logger.Debug("There was an error with the reply attempt");
                 logger.Debug(e);
             }
         }

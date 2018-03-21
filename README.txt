@@ -28,6 +28,29 @@ Make a reply to a thread in the r/boxing subreddit, in this format:
 
 ___________________________________TO-DO_______________________________________________________________
 
-- deploy to rpi
+- Improve unit tests
 
-- create a deployment script so I can deploy from my workstation to the pi programatically
+- Improve wiki name searching
+
+
+
+___________________________________NOTES_______________________________________________________________
+
+dotnet publish -r linux-arm -c Release
+
+on rpi, run by:
+
+chmod 755 ./RedditFighterBotCore
+./RedditFighterBotCore
+
+To Start the server:
+
+screen -S monitor -d -m ./monitor.sh
+
+To reattach to the running screen session:
+
+screen -S monitor -rd
+
+To stop the running screen session:
+
+screen -X -S monitor quit
