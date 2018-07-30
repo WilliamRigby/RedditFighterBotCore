@@ -22,12 +22,12 @@ namespace RedditFighterBot
         private static string username;
         private static string password;
         private static string redirect;
-        private static readonly bool debug;
+        private static readonly string debug;
         private static readonly ILog logger;
         
         static Bot()
         {
-            debug = Convert.ToBoolean(ConfigurationManager.AppSettings["isDebugMode"]);
+            debug = ConfigurationManager.AppSettings["isDebugMode"];
             logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         }        
 
@@ -80,33 +80,13 @@ namespace RedditFighterBot
                 XmlDocument doc = new XmlDocument();
                 doc.LoadXml(file);
 
-                XmlNodeList nodeList = doc.SelectNodes("/config/accounts/account");
+                XmlNode node = doc.SelectSingleNode($"/config/accounts/account[@debug={debug}]");
 
-                foreach (XmlNode node in nodeList)
-                {
-                    if(debug == false)
-                    {
-                        if(node.SelectSingleNode("username").InnerText.Contains("Test") == false)
-                        {
-                            clientid = node.SelectSingleNode("clientid").InnerText;
-                            secret = node.SelectSingleNode("secret").InnerText;
-                            username = node.SelectSingleNode("username").InnerText;
-                            password = node.SelectSingleNode("password").InnerText;
-                            redirect = node.SelectSingleNode("redirect").InnerText;
-                        }                        
-                    }
-                    else
-                    {
-                        if (node.SelectSingleNode("username").InnerText.Contains("Test") == true)
-                        {
-                            clientid = node.SelectSingleNode("clientid").InnerText;
-                            secret = node.SelectSingleNode("secret").InnerText;
-                            username = node.SelectSingleNode("username").InnerText;
-                            password = node.SelectSingleNode("password").InnerText;
-                            redirect = node.SelectSingleNode("redirect").InnerText;
-                        }
-                    }
-                }
+                username = node.SelectSingleNode("username").InnerText;
+                clientid = node.SelectSingleNode("clientid").InnerText;
+                secret = node.SelectSingleNode("secret").InnerText;                            
+                password = node.SelectSingleNode("password").InnerText;
+                redirect = node.SelectSingleNode("redirect").InnerText;                
             }
             catch(Exception)
             {
