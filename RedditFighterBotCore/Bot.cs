@@ -73,25 +73,18 @@ namespace RedditFighterBot
 
         private static async Task ReadPasswords()
         {
-            try
-            {
-                string file = await File.ReadAllTextAsync(@"passwords.xml");
+            string file = await File.ReadAllTextAsync(@"passwords.xml");
 
-                XmlDocument doc = new XmlDocument();
-                doc.LoadXml(file);
+            XmlDocument doc = new XmlDocument();
+            doc.LoadXml(file);
 
-                XmlNode node = doc.SelectSingleNode($"/config/accounts/account[@debug={debug}]");
+            XmlNode node = doc.SelectSingleNode($"/config/accounts/account[@debug={debug}]");
 
-                username = node.SelectSingleNode("username").InnerText;
-                clientid = node.SelectSingleNode("clientid").InnerText;
-                secret = node.SelectSingleNode("secret").InnerText;                            
-                password = node.SelectSingleNode("password").InnerText;
-                redirect = node.SelectSingleNode("redirect").InnerText;                
-            }
-            catch(Exception)
-            {
-                throw;
-            }
+            username = node.SelectSingleNode("username").InnerText;
+            clientid = node.SelectSingleNode("clientid").InnerText;
+            secret = node.SelectSingleNode("secret").InnerText;                            
+            password = node.SelectSingleNode("password").InnerText;
+            redirect = node.SelectSingleNode("redirect").InnerText;                
         }       
         
         private static async Task<int> Loop()
@@ -251,7 +244,7 @@ namespace RedditFighterBot
                 {
                     LogMessage(rate.Message);
                     await Task.Delay(Convert.ToInt32(rate.TimeToReset.TotalMilliseconds));
-                    SendReply(comment, reply);
+                    SendReply(comment, reply, ++attemptCounter);
                 }
                 else
                 {
