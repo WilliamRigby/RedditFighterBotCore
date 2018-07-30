@@ -139,31 +139,30 @@ namespace RedditFighterBot
 
             LogMessage($"Request received: {comment.Body}");
 
-            string request_string = StringUtilities.GetRequestStringFromComment(comment.Body);
+            string requestLine = StringUtilities.GetRequestStringFromComment(comment.Body);
 
             //if we cannot find a line of the comment that contains the bot's name, then continue
             //this implies that this was probably just a regular comment reply, and not a request
-            if (request_string == null || request_string == "")
+            if (requestLine == null || requestLine == "")
             {
-                LogMessage($"request string invalid: {request_string}");
-                return;
+                throw new Exception($"request string invalid: {requestLine}");
             }
 
-            request_string = StringUtilities.RemoveBotName(request_string.ToLower(), username.ToLower());
-            request_string = StringUtilities.RemoveRESUpvoteNumbers(request_string);
-            int request_size = StringUtilities.GetUserRequestSize(request_string);
-            request_string = StringUtilities.RemoveNumbers(request_string);
-            List<string> fighters = StringUtilities.GetFighters(request_string);
+            requestLine = StringUtilities.RemoveBotName(requestLine.ToLower(), username.ToLower());
+            requestLine = StringUtilities.RemoveRESUpvoteNumbers(requestLine);
+            int requestSize = StringUtilities.GetUserRequestSize(requestLine);
+            requestLine = StringUtilities.RemoveNumbers(requestLine);
+            List<string> fighters = StringUtilities.GetFighters(requestLine);
             
             var wikiCheckedFighters = await GetWikiCheckedFighters(fighters);
 
             //if we threw an exception for every wiki search, and thus we have no wiki pages, then just break out of this garbage request
             if (wikiCheckedFighters.Count == 0)
             {
-                return;
+                throw new Exception($"Unable to find any fighter for request string: {requestLine}");
             }
 
-            IRequest request = GetRequest(wikiCheckedFighters, request_size);
+            IRequest request = GetRequest(wikiCheckedFighters, requestSize);
 
             string result = await CreateTables(request);
 
@@ -173,7 +172,7 @@ namespace RedditFighterBot
             }
             else
             {
-                LogMessage("Reply attempt failed due to being unable to find the record section index in the ToC");
+                throw new Exception("Reply attempt failed due to being unable to find the record section index in the ToC");
             }
         }
 
@@ -201,11 +200,11 @@ namespace RedditFighterBot
             return checkedFighters;
         }
 
-        private static IRequest GetRequest(List<string> fighters, int request_size)
+        private static IRequest GetRequest(List<string> fighters, int requestSize)
         {
-            if (request_size != -1)
+            if (requestSize != -1)
             {
-                return new SpecifiedRequest(fighters, request_size);
+                return new SpecifiedRequest(fighters, requestSize);
             }
             else
             {

@@ -10,20 +10,19 @@ namespace RedditFighterBot.Execution
         
         public static string GetRequestStringFromComment(string body)
         {
+            string[] commentLines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-            //first edit the string and extract parameters
-            string[] comment_lines = body.Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-
-            string fighters_string = "";
-            for (int i = 0; i < comment_lines.Length; i++)
+            string request = "";
+            for (int i = 0; i < commentLines.Length; i++)
             {
-                if (comment_lines[i].Contains("u/") == true)
+                if (commentLines[i].Contains("u/") == true)
                 {
-                    fighters_string = comment_lines[i];
+                    request = commentLines[i];
+                    break;
                 }
             }
 
-            return fighters_string;
+            return request;
         }
 
         public static bool DetermineIfPartial(string request)
