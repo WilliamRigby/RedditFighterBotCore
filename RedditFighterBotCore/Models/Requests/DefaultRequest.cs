@@ -1,5 +1,4 @@
-﻿using RedditSharp.Things;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace RedditFighterBot
 {

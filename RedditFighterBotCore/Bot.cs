@@ -1,19 +1,18 @@
-﻿using log4net;
-using Nito.AsyncEx;
-using RedditFighterBot.Execution;
-using RedditFighterBot.Models;
-using RedditSharp;
-using RedditSharp.Things;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Xml;
+using RedditSharp;
+using RedditSharp.Things;
+using RedditFighterBot.Execution;
+using RedditFighterBot.Models;
+using Nito.AsyncEx;
+using log4net;
 
 namespace RedditFighterBot
 {
-
     public class Bot
     {
         private static Reddit reddit;     
@@ -63,9 +62,7 @@ namespace RedditFighterBot
                 return 1;
             }
             
-            await Loop();
-
-            return 0;
+            return await Loop();
         }
 
         private static async Task ReadPasswords()
@@ -111,7 +108,7 @@ namespace RedditFighterBot
             }
         }       
         
-        private static async Task Loop()
+        private static async Task<int> Loop()
         {
             while(true)
             {            
@@ -146,7 +143,7 @@ namespace RedditFighterBot
                 }
 
                 await Task.Delay(10000);
-            }            
+            }
         }
 
         private static async Task HandlePrivateMessage(PrivateMessage pm)

@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 
 namespace RedditFighterBot
 {
-    class BingSpellCheckDTO
+    public class BingSpellCheckDTO
     {
         public int offset { get; set; }
 
@@ -15,7 +13,7 @@ namespace RedditFighterBot
         public List<Suggestion> suggestions { get; set; }
     }
 
-    class Suggestion
+    public class Suggestion
     {
         public string suggestion { get; set; }
 
