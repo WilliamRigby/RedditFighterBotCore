@@ -12,9 +12,10 @@ namespace RedditFighterBot.Execution
 {
     public class WikiAccessor
     {
+        private const int MAXROWS = 150;
         private StringBuilder Builder { get; set; }
         private int RowCount { get; set; }
-        private string FighterType { get; set; }                
+        private string FighterType { get; set; }                        
 
         public WikiAccessor()
         {            
@@ -25,62 +26,62 @@ namespace RedditFighterBot.Execution
         {
             JObject json = await CreateWebRequest("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srprop=size&srsearch=" + fighter + " fighter");
             
-            // get JSON result objects into a list
             JEnumerable<JToken> results = json["query"]["search"].Children();
-
-            // serialize JSON results into .NET objects
+            
             List<WikiSearchResultDTO> searchResults = new List<WikiSearchResultDTO>();
             foreach (JToken result in results)
             {
-                // JToken.ToObject is a helper method that uses JsonSerializer internally
                 WikiSearchResultDTO searchResult = result.ToObject<WikiSearchResultDTO>();
                 searchResults.Add(searchResult);
-            }
+            }           
             
+            return PickSearchResult(fighter, searchResults);
+        }
+
+        private WikiSearchResultDTO PickSearchResult(string fighter, List<WikiSearchResultDTO> searchResults)
+        {
             if (searchResults.Count > 0)
-            {
-                foreach (WikiSearchResultDTO result in searchResults)
-                {
-                    if (result.title.ToLower().Contains("(fighter)"))
-                    {
-                        result.LevenshteinDistance = StringUtilities.LevenshteinDistance((fighter.ToLower() + " (fighter)").ToCharArray(), result.title.ToLower().ToCharArray());
-                    }
-                    else
-                    {
-                        result.LevenshteinDistance = StringUtilities.LevenshteinDistance(fighter.ToLower().ToCharArray(), result.title.ToLower().ToCharArray());
-                    }
-                }
-
-                searchResults.Sort((x, y) => x.LevenshteinDistance.CompareTo(y.LevenshteinDistance));
-
-                int ShortestDistance = 0;
-
-                List<WikiSearchResultDTO> ties = new List<WikiSearchResultDTO>();
-
-                for (int i = 0; i < searchResults.Count; i++)
-                {
-                    if (i == 0) { ShortestDistance = searchResults[i].LevenshteinDistance; }
-
-                    if (searchResults[i].LevenshteinDistance == ShortestDistance)
-                    {
-                        ties.Add(searchResults[i]);
-                    }
-                }
-
-                for (int i = 0; i < ties.Count; i++)
-                {
-                    if (ties[i].title.Contains("(fighter)"))
-                    {
-                        return ties[i];
-                    }
-                }
-
-                return ties[0];
-            }
-            else
             {
                 return null;
             }
+            
+            foreach (WikiSearchResultDTO result in searchResults)
+            {
+                if (result.title.ToLower().Contains("(fighter)"))
+                {
+                    result.LevenshteinDistance = StringUtilities.LevenshteinDistance(($"{fighter.ToLower()} (fighter)").ToCharArray(), result.title.ToLower().ToCharArray());
+                }
+                else
+                {
+                    result.LevenshteinDistance = StringUtilities.LevenshteinDistance(fighter.ToLower().ToCharArray(), result.title.ToLower().ToCharArray());
+                }
+            }
+
+            searchResults.Sort((x, y) => x.LevenshteinDistance.CompareTo(y.LevenshteinDistance));
+
+            int shortestDistance = 0;
+
+            List<WikiSearchResultDTO> ties = new List<WikiSearchResultDTO>();
+
+            for (int i = 0; i < searchResults.Count; i++)
+            {
+                if (i == 0) { shortestDistance = searchResults[i].LevenshteinDistance; }
+
+                if (searchResults[i].LevenshteinDistance == shortestDistance)
+                {
+                    ties.Add(searchResults[i]);
+                }
+            }
+
+            for (int i = 0; i < ties.Count; i++)
+            {
+                if (ties[i].title.Contains("(fighter)"))
+                {
+                    return ties[i];
+                }
+            }
+
+            return ties[0];            
         }
 
         public async Task<int> GetIndexOfRecordTableInTableOfContents(string fighter)
@@ -104,8 +105,6 @@ namespace RedditFighterBot.Execution
          * we take advantage of that consistent pattern to be able to parse the table */
         public async Task<string> GetEntireTable(int requestSize, string fighter, int index)
         {
-            /* keep track of the number of rows which have been created, 
-               so that we won't let the comment exceed the reddit limit */
             RowCount = 1;
 
             HtmlNodeCollection tables = await GetHTMLTables(fighter, index);
@@ -242,13 +241,11 @@ namespace RedditFighterBot.Execution
 
         private void GetBoxingDetailedRecordTable(int requestSize, HtmlNode node)
         {
-            int cell_count = 1;
+            int cellCount = 1;
 
             foreach (HtmlNode row in node.SelectSingleNode("tbody").SelectNodes("tr"))
             {
-                bool shouldBreakout = BreakoutLogic(requestSize, RowCount);
-
-                if (shouldBreakout == true)
+                if (BreakoutLogic(requestSize, RowCount) == true)
                 {
                     break;
                 }
@@ -258,15 +255,13 @@ namespace RedditFighterBot.Execution
                  * thus we just want to throw this row away */
                 if (RowCount != 2)
                 {
-
-                    cell_count = 1;
+                    cellCount = 1;
                     /* for each of the row's cells (i.e. columns) */
                     foreach (HtmlNode cell in row.SelectNodes("th|td"))
                     {
-
                         /* this conditional is supposed to correspond to the 'result' comlumn of the table
                            sometimes is just an index column though, so throw that away */
-                        if (cell_count == 1)
+                        if (cellCount == 1)
                         {
                             if (GetNodeInnerText(cell).ToLower() == "win" || GetNodeInnerText(cell).ToLower() == "loss" ||
                                 GetNodeInnerText(cell).ToLower() == "draw" || GetNodeInnerText(cell).ToLower() == "nc")
@@ -275,7 +270,7 @@ namespace RedditFighterBot.Execution
                             }
                         }
                         /* if it's the 'result' column, we want a newline char to precede it */
-                        else if (cell_count == 2)
+                        else if (cellCount == 2)
                         {
                             if (GetNodeInnerText(cell).ToLower() == "win" || GetNodeInnerText(cell).ToLower() == "loss" ||
                                 GetNodeInnerText(cell).ToLower() == "draw" || GetNodeInnerText(cell).ToLower() == "nc")
@@ -292,11 +287,11 @@ namespace RedditFighterBot.Execution
                                 Builder.Append(" | " + GetNodeInnerText(cell));
                             }
                         }
-                        else if (cell_count == 3 || cell_count == 4 || cell_count == 5 || cell_count == 6)
+                        else if (cellCount == 3 || cellCount == 4 || cellCount == 5 || cellCount == 6)
                         {
                             Builder.Append(" | " + GetNodeInnerText(cell));
                         }
-                        else if (cell_count == 7)
+                        else if (cellCount == 7)
                         {
                             /* we want the date of the fight, so if we can parse this string as a date, then add it to the table */
                             try
@@ -310,7 +305,7 @@ namespace RedditFighterBot.Execution
                             }
                         }
 
-                        cell_count++;
+                        cellCount++;
                     }
                 }
 
@@ -320,13 +315,11 @@ namespace RedditFighterBot.Execution
 
         private void GetMmaDetailedRecordTable(int requestSize, HtmlNode node)
         {
-            int cell_count = 1;
+            int cellCount = 1;
 
             foreach (HtmlNode row in node.SelectSingleNode("tbody").SelectNodes("tr"))
             {
-                bool shouldBreakout = BreakoutLogic(requestSize, RowCount);
-
-                if (shouldBreakout == true)
+                if (BreakoutLogic(requestSize, RowCount) == true)
                 {
                     break;
                 }
@@ -336,15 +329,14 @@ namespace RedditFighterBot.Execution
                  * thus we just want to throw this row away */
                 if (RowCount != 2)
                 {
-
-                    cell_count = 1;
+                    cellCount = 1;
                     /* for each of the row's cells (i.e. columns) */
                     foreach (HtmlNode cell in row.SelectNodes("th|td"))
                     {
 
                         /* this conditional is supposed to correspond to the 'result' comlumn of the table
                            sometimes is just an index column though, so throw that away */
-                        if (cell_count == 1)
+                        if (cellCount == 1)
                         {
                             if (GetNodeInnerText(cell).ToLower() == "win" || GetNodeInnerText(cell).ToLower() == "loss" ||
                                 GetNodeInnerText(cell).ToLower() == "draw" || GetNodeInnerText(cell).ToLower() == "nc")
@@ -353,7 +345,7 @@ namespace RedditFighterBot.Execution
                             }
                         }
                         /* if it's the 'result' column, we want a newline char to precede it */
-                        else if (cell_count == 2)
+                        else if (cellCount == 2)
                         {
                             if (GetNodeInnerText(cell).ToLower() == "win" || GetNodeInnerText(cell).ToLower() == "loss" ||
                                 GetNodeInnerText(cell).ToLower() == "draw" || GetNodeInnerText(cell).ToLower() == "nc")
@@ -370,13 +362,12 @@ namespace RedditFighterBot.Execution
                                 Builder.Append(" | " + GetNodeInnerText(cell));
                             }
                         }
-                        else if (cell_count == 3 || cell_count == 4 || cell_count == 7 || cell_count == 8)
+                        else if (cellCount == 3 || cellCount == 4 || cellCount == 7 || cellCount == 8)
                         {
                             Builder.Append(" | " + GetNodeInnerText(cell));
                         }
-                        else if (cell_count == 6)
+                        else if (cellCount == 6)
                         {
-
                             HtmlNodeCollection collection = cell.SelectNodes("span");
 
                             foreach (HtmlNode span in collection)
@@ -394,7 +385,7 @@ namespace RedditFighterBot.Execution
                             }
                         }
 
-                        cell_count++;
+                        cellCount++;
                     }
                 }
 
@@ -404,13 +395,11 @@ namespace RedditFighterBot.Execution
 
         private void GetDetailedRecordTableWithTopRecord(int requestSize, HtmlNode node)
         {
-            int cell_count = 1;
+            int cellCount = 1;
 
             foreach (HtmlNode row in node.SelectSingleNode("tbody").SelectNodes("tr"))
             {
-                bool shouldBreakout = BreakoutLogic(requestSize, RowCount);
-
-                if (shouldBreakout == true)
+                if (BreakoutLogic(requestSize, RowCount) == true)
                 {
                     break;
                 }
@@ -432,14 +421,14 @@ namespace RedditFighterBot.Execution
                 else if (RowCount != 2)
                 {
 
-                    cell_count = 1;
+                    cellCount = 1;
                     /* for each of the row's cells (i.e. columns) */
                     foreach (HtmlNode cell in row.SelectNodes("th|td"))
                     {
 
                         /* this conditional is supposed to correspond to the 'result' comlumn of the table
                            sometimes is just an index column though, so throw that away */
-                        if (cell_count == 1)
+                        if (cellCount == 1)
                         {
                             if (GetNodeInnerText(cell).ToLower() == "win" || GetNodeInnerText(cell).ToLower() == "loss" ||
                                 GetNodeInnerText(cell).ToLower() == "draw" || GetNodeInnerText(cell).ToLower() == "nc")
@@ -448,7 +437,7 @@ namespace RedditFighterBot.Execution
                             }
                         }
                         /* if it's the 'result' column, we want a newline char to precede it */
-                        else if (cell_count == 2)
+                        else if (cellCount == 2)
                         {
                             if (GetNodeInnerText(cell).ToLower() == "win" || GetNodeInnerText(cell).ToLower() == "loss" ||
                                 GetNodeInnerText(cell).ToLower() == "draw" || GetNodeInnerText(cell).ToLower() == "nc")
@@ -465,11 +454,11 @@ namespace RedditFighterBot.Execution
                                 Builder.Append(" | " + GetNodeInnerText(cell));
                             }
                         }
-                        else if (cell_count == 3 || cell_count == 4 || cell_count == 5 || cell_count == 6)
+                        else if (cellCount == 3 || cellCount == 4 || cellCount == 5 || cellCount == 6)
                         {
                             Builder.Append(" | " + GetNodeInnerText(cell));
                         }
-                        else if (cell_count == 7)
+                        else if (cellCount == 7)
                         {
                             /* we want the date of the fight, so if we can parse this string as a date, then add it to the table */
                             try
@@ -483,7 +472,7 @@ namespace RedditFighterBot.Execution
                             }
                         }
 
-                        cell_count++;
+                        cellCount++;
                     }
                 }
 
@@ -503,9 +492,9 @@ namespace RedditFighterBot.Execution
                 var stream = response.GetResponseStream();
                 StreamReader reader = new StreamReader(stream);
 
-                string objResponse = await reader.ReadToEndAsync();
+                string text = await reader.ReadToEndAsync();
 
-                json = JObject.Parse(objResponse.ToString());
+                json = JObject.Parse(text);
 
                 stream.Close();
                 response.Close();
@@ -516,33 +505,8 @@ namespace RedditFighterBot.Execution
 
         private bool BreakoutLogic(int requestSize, int rowCount)
         {
-            bool shouldBreakout = false;
-
-            /* some fighter's have so many fights that the comment would exceed the limit that reddit imposes */
-            if (requestSize <= 0)
-            {
-                if (requestSize == -999)
-                {
-                    if (rowCount > 150)
-                    {
-                        shouldBreakout = true;
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("error: user specified negative number");
-                    shouldBreakout = true;
-                }
-            }
-            else
-            {
-                if (rowCount > 150 || rowCount > requestSize + 2)
-                {
-                    shouldBreakout = true;
-                }
-            }
-
-            return shouldBreakout;
+            /* some fighter's have so many fights that the comment would exceed the limit that reddit imposes */            
+            return (rowCount > MAXROWS || rowCount > requestSize + 2) ? true : false;            
         }
 
         private string GetNodeInnerText(HtmlNode cell)

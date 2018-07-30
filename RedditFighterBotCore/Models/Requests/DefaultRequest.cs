@@ -11,11 +11,11 @@ namespace RedditFighterBot
 
         public List<string> FighterNames { get; private set; }
 
-        public DefaultRequest(List<string> fighter)
+        public DefaultRequest(List<string> fighters)
         {
             IsPartialTable = false;
             RequestSize = 5;
-            FighterNames = fighter;
+            FighterNames = fighters;
         }        
     }
 }

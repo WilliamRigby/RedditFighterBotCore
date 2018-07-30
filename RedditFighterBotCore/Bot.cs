@@ -217,7 +217,6 @@ namespace RedditFighterBot
                 catch (NullReferenceException ex)
                 {
                     LogMessage($"Null returned from SearchWiki(fighter) for fighter: {fighter}");
-
                     LogMessage(ex.Message);
                     continue;
                 }
