@@ -20,8 +20,9 @@
     <PackageReference Include="HtmlAgilityPack" Version="1.6.15" />
     <PackageReference Include="log4net" Version="2.0.8" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
-    <PackageReference Include="RedditSharp" Version="2.0.0-CI00064" />
+    <PackageReference Include="RedditSharp" Version="2.0.0-CI00065" />
     <PackageReference Include="System.Interactive.Async" Version="3.1.1" />
     <PackageReference Include="System.Net.NameResolution" Version="4.3.0" />
   </ItemGroup>
+
 </Project>

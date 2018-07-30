@@ -25,7 +25,7 @@ Invoke-SSHCommand -Index 0 -Command "rm /home/pi/bot/passwords.xml"
 
 
 # Send each file in the local build folder to the publish folder on the pi
-New-SFTPSession -ComputerName 192.168.1.94 -Credential $Credentials -KeyFile "Z:\pi_keys\pi2.ppk"
+New-SFTPSession -ComputerName $ip -Credential $Credentials -KeyFile "Z:\pi_keys\pi2.ppk"
 $SftpPath = "/home/pi/bot/publish/"
 
 $FilePath = -join($ScriptPath, "\RedditFighterBotCore\bin\Release\netcoreapp2.0\linux-arm\publish")

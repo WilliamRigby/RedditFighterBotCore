@@ -1,6 +1,4 @@
-﻿
-using log4net;
-using Newtonsoft.Json.Linq;
+﻿using log4net;
 using RedditFighterBot.Models;
 using RedditSharp;
 using RedditSharp.Things;
@@ -9,7 +7,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Threading;
@@ -34,39 +31,35 @@ namespace RedditFighterBot
 
         private static ILog logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
-
         static void Main(string[] args)
         {
-
             var logRepo = LogManager.GetRepository(Assembly.GetEntryAssembly());
             log4net.Config.XmlConfigurator.Configure(logRepo, new FileInfo("app.config"));
 
-            Console.WriteLine("Application Start");
-            logger.Debug("Application Start");
+            LogMessage("Application Start");
 
             try
             {
                 ReadPasswords();
 
-                reddit = new Reddit(new BotWebAgent(username, password, clientid, secret, redirect), false);
+                BotWebAgent bot = new BotWebAgent(username, password, clientid, secret, redirect);
+                bot.RateLimiter = new RateLimitManager() { Mode = RateLimitMode.SmallBurst };
+
+                reddit = new Reddit(bot, false);
                 reddit.InitOrUpdateUserAsync().Wait();
 
-                logger.Debug("Logged in...");
-                Console.WriteLine("Logged in...");
-                logger.Debug("About to enter Timer controlled infinite loop");
-                Console.WriteLine("About to enter Timer controlled infinite loop");
+                LogMessage("Logged in...");
+                LogMessage("About to enter Timer controlled infinite loop");
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                logger.Debug(e);
-                System.Environment.Exit(1);
+                LogMessage(e.Message);
+                Environment.Exit(1);
             }
 
             timer = new Timer(new TimerCallback(InfiniteLoopCallBack), null, 0, 0);
             System.Threading.Thread.Sleep(Timeout.Infinite);
         }
-
 
         private static void ReadPasswords()
         {
@@ -109,47 +102,7 @@ namespace RedditFighterBot
             {
                 throw e;
             }
-        }
-
-
-        private static void Authenticate()
-        {
-            try
-            {
-                HttpWebRequest http = (HttpWebRequest)WebRequest.Create("https://www.reddit.com/api/v1/access_token");
-
-                http.Credentials = new NetworkCredential(clientid, secret);
-                http.Method = "POST";
-                http.ContentType = "application/x-www-form-urlencoded";
-
-                //write the post data to the request
-                Stream stream = http.GetRequestStreamAsync().Result;
-                byte[] data = Encoding.ASCII.GetBytes("grant_type=password&username=" + WebUtility.UrlEncode(username) + "&password=" + WebUtility.UrlEncode(password));
-                stream.Write(data, 0, data.Length);
-                
-
-                //send the request and get the response
-                WebResponse response = http.GetResponseAsync().Result;
-                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
-                JObject json = JObject.Parse(responseString);
-
-                JToken result = json;
-
-                RedditOauthResponseDTO oauth = result.ToObject<RedditOauthResponseDTO>();
-
-                reddit = new Reddit(oauth.access_token);
-                reddit.InitOrUpdateUserAsync().Wait();
-
-                response.Dispose();
-                stream.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-        }
-        
+        }        
 
         private static void InfiniteLoopCallBack(object o)
         {
@@ -161,175 +114,185 @@ namespace RedditFighterBot
 
                 using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
                 {
-                    while (enumerator.MoveNext().Result)
+                    while (enumerator.MoveNext() != null && enumerator.MoveNext().Result == true)
                     {
                         Thing thing = enumerator.Current;
-
-                        //if this Thing is a PM
+                        
                         if (thing.Kind == "t4")
                         {
                             PrivateMessage pm = ((PrivateMessage)thing);
 
-                            pm.SetAsReadAsync();
-
-                            logger.Debug("Got a PM");
-                            logger.Debug(pm.Subject + " - " + pm.Body);
+                            HandlePrivateMessage(pm);
                         }
-                        //if this Thing is a comment
                         else if (thing.Kind == "t1")
                         {
                             Comment comment = ((Comment)thing);
 
-                            //mark this comment as 'read' so we don't process any comment more than once
-                            comment.SetAsReadAsync();
-
-                            //log the comment body obvs
-                            Console.WriteLine("Reuqest received: " + comment.Body);
-                            logger.Debug("Reuqest received: " + comment.Body);
-
-                            //get the line of the comment body which is the actual request
-                            string request_string = StringUtilities.GetRequestStringFromComment(comment.Body);
-
-                            
-                            //if we cannot find a line of the comment that contains the bot's name, then continue
-                            //this implies that this was probably just a regular comment reply, and not a request
-                            if (request_string == null || request_string == "")
-                            {
-                                logger.Debug("request string invalid: " + request_string);
-                                continue;
-                            }
-
-                            //go ahead and remove the bot name from the string
-                            request_string = StringUtilities.RemoveBotName(request_string.ToLower(), username.ToLower());
-
-                            //remove RES vote sum for the bot (so user can copy and paste a previous request, and those nums won't cause an error)
-                            request_string = StringUtilities.RemoveRESUpvoteNumbers(request_string);
-
-                            //get the user specified request size
-                            int request_size = StringUtilities.GetUserRequestSize(request_string);
-
-                            //remove the user specified size numbers
-                            request_string = StringUtilities.RemoveNumbers(request_string);
-
-                            //get the fighter name(s) as an array
-                            List<string> fighters = StringUtilities.GetFighters(request_string);
-
-                            //replace the nonenglish chars in the request, which might mess up the bing search
-                            //fighters = StringUtilities.ReplaceNonEnglishChars(fighters);
-
-                            //fix the user input using the Bing spell check api
-                            //List<string> bing_checked_fighters = BingSpellCheck(fighters);
-
-                            //reinitialize the stringbuilder back to a new object
-                            WikiAccessor.Builder = new System.Text.StringBuilder();
-
-                            // now search via the wiki api for pages with similar names
-                            // this helps to correct locale errors
-                            // i.e. roman gonzalez vs Román González (boxer)
-                            List<string> wiki_checked_fighters = new List<string>();
-                            foreach (string fighter in fighters)
-                            {
-                                WikiSearchResultDTO test = WikiAccessor.SearchWiki(fighter);
-                                                                
-                                try
-                                {
-                                    wiki_checked_fighters.Add(test.title);
-                                }
-                                catch (NullReferenceException ex)
-                                {
-                                    logger.Debug("Null returned from SearchWiki(fighter) for fighter: " + fighter);
-                                    logger.Debug(ex.Message);
-                                    continue;
-                                }
-                            }
-
-                            //if we threw an exception for every wiki search, and thus we have no wiki pages, then just break out of this garbage request
-                            if (wiki_checked_fighters.Count == 0)
-                            {
-                                continue;
-                            }
-
-                            //create the request object
-                            IRequest request = null;
-                            if (request_size != -1)
-                            {
-                                request = new SpecifiedRequest(wiki_checked_fighters, request_size);
-                            }
-                            else
-                            {
-                                request = new DefaultRequest(wiki_checked_fighters);
-                            }
-
-                            WikiAccessor.Request_Size = request.RequestSize;
-
-                            //iteratively create the reply string
-                            foreach (string fighter in request.FighterNames)
-                            {
-                                
-                                int index = WikiAccessor.GetIndex(fighter);                                
-
-                                if (index != -1)
-                                {
-                                    WikiAccessor.GetEntireTable(fighter, index);
-                                }
-                            }
-                            
-
-                            //create the reply object                        
-                            if (WikiAccessor.Builder != null && WikiAccessor.Builder.ToString() != "")
-                            {
-                                //send the reply
-                                SendReply(comment, WikiAccessor.Builder.ToString() + "\n\n^(I am a bot. This post was requested by " + comment.AuthorName + ")\n\n[^(Usage / FAQ)](http://redditfighterbotwebapp.azurewebsites.net/)");
-                            }
-                            else
-                            {
-                                logger.Debug("Reply attempt failed due to empty StringBuilder");
-                            }
+                            HandleComment(comment);
                         }
                     }
                 }               
-            }            
-            catch(RedditSharp.RedditHttpException e)
-            {
-                logger.Debug(e);
-                try
-                {
-                    ReadPasswords();
-                    Authenticate();
-                }
-                catch(Exception ex)
-                {
-                    logger.Debug(ex);
-                    System.Environment.Exit(1);
-                }
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                logger.Debug(e);                
+                LogMessage(e.Message);          
             }
 
             timer.Change(10000, Timeout.Infinite);
         }
 
+        private static void HandlePrivateMessage(PrivateMessage pm)
+        {
+            pm.SetAsReadAsync();
 
-        private static void SendReply(Comment comment, string reply)
+            LogMessage("Got a PM");
+            LogMessage(pm.Subject + " - " + pm.Body);
+        }
+
+        private static void HandleComment(Comment comment)
+        {
+            comment.SetAsReadAsync();
+
+            LogMessage("Request received: " + comment.Body);
+
+            string request_string = StringUtilities.GetRequestStringFromComment(comment.Body);
+
+            //if we cannot find a line of the comment that contains the bot's name, then continue
+            //this implies that this was probably just a regular comment reply, and not a request
+            if (request_string == null || request_string == "")
+            {
+                LogMessage("request string invalid: " + request_string);
+                return;
+            }
+
+            request_string = StringUtilities.RemoveBotName(request_string.ToLower(), username.ToLower());
+            request_string = StringUtilities.RemoveRESUpvoteNumbers(request_string);
+            int request_size = StringUtilities.GetUserRequestSize(request_string);
+            request_string = StringUtilities.RemoveNumbers(request_string);
+            List<string> fighters = StringUtilities.GetFighters(request_string);
+
+            WikiAccessor.Builder = new StringBuilder();
+
+            var wikiCheckedFighters = GetWikiCheckedFighters(fighters);
+
+            //if we threw an exception for every wiki search, and thus we have no wiki pages, then just break out of this garbage request
+            if (wikiCheckedFighters.Count == 0)
+            {
+                return;
+            }
+
+            IRequest request = GetRequest(wikiCheckedFighters, request_size);
+
+            WikiAccessor.RequestSize = request.RequestSize;
+
+            CreateTables(request);
+
+            if (WikiAccessor.Builder != null && WikiAccessor.Builder.ToString() != "")
+            {
+                SendReply(comment, WikiAccessor.Builder.ToString() + "\n\n^(I am a bot. This post was requested by " + comment.AuthorName + ")\n\n[^(Usage / FAQ)](http://redditfighterbotwebapp.azurewebsites.net/)");
+            }
+            else
+            {
+                LogMessage("Reply attempt failed due to empty StringBuilder");
+            }
+        }
+
+        private static List<string> GetWikiCheckedFighters(List<string> fighters)
+        {
+            var checkedFighters = new List<string>();
+
+            foreach (string fighter in fighters)
+            {
+                WikiSearchResultDTO test = WikiAccessor.SearchWiki(fighter);
+
+                try
+                {
+                    checkedFighters.Add(test.title);
+                }
+                catch (NullReferenceException ex)
+                {
+                    LogMessage("Null returned from SearchWiki(fighter) for fighter: " + fighter);
+                    LogMessage(ex.Message);
+                    continue;
+                }
+            }
+
+            return checkedFighters;
+        }
+
+        private static IRequest GetRequest(List<string> fighters, int request_size)
+        {
+            if (request_size != -1)
+            {
+                return new SpecifiedRequest(fighters, request_size);
+            }
+            else
+            {
+                return new DefaultRequest(fighters);
+            }
+        }
+
+        private static void CreateTables(IRequest request)
+        {
+            foreach (string fighter in request.FighterNames)
+            {
+                int index = WikiAccessor.GetIndex(fighter);
+
+                if (index != -1)
+                {
+                    WikiAccessor.GetEntireTable(fighter, index);
+                }
+            }
+        }
+
+        private static async void SendReply(Comment comment, string reply)
         {
             try
             {
-                comment.ReplyAsync(reply).Wait();
-                logger.Debug("Reply successful!");
+                Task<Comment> task = comment.ReplyAsync(reply);
+                task.Wait();
+
+                if(!task.IsFaulted)
+                {
+                    LogMessage("Reply successful!");
+                }
+                else
+                {
+                    throw task.Exception;
+                }                
             }
             catch (RateLimitException rate)
             {
-                logger.Debug(rate.Message);
-                Thread.Sleep(45000);
-                SendReply(comment, reply);
+                await HandleRateLimitException(rate, comment, reply);
             }
-            catch (Exception e)
+            catch (AggregateException aggregate)
             {
-                logger.Debug(e);
+                RateLimitException rate = (RateLimitException)aggregate.InnerExceptions.SingleOrDefault(e => e.GetType() == typeof(RateLimitException));
+
+                if(rate != null)
+                {
+                    await HandleRateLimitException(rate, comment, reply);
+                }
+                else
+                {
+                    LogMessage(aggregate.GetBaseException().Message);
+                }
             }
+        }
+
+        private static async Task HandleRateLimitException(RateLimitException rate, Comment comment, string reply)
+        {
+            LogMessage(rate.Message);
+
+            await Task.Delay(Convert.ToInt32(rate.TimeToReset.TotalMilliseconds));
+
+            SendReply(comment, reply);
+        }
+
+        private static void LogMessage(string message)
+        {
+            logger.Debug(message);
+            Console.WriteLine(message);
         }
     }
 }

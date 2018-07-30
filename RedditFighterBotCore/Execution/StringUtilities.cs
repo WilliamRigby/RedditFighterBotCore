@@ -15,7 +15,6 @@ namespace RedditFighterBot
     public static class StringUtilities
     {
         private static Regex RESregex = new Regex("\\[.*\\]");
-
         
         public static string GetRequestStringFromComment(string body)
         {
@@ -34,7 +33,6 @@ namespace RedditFighterBot
 
             return fighters_string;
         }
-
 
         public static bool DetermineIfPartial(string request)
         {
@@ -63,7 +61,6 @@ namespace RedditFighterBot
             return body.Trim();
         }
 
-
         public static int GetUserRequestSize(string body)
         {
             string[] words = body.Split(' ');
@@ -81,7 +78,6 @@ namespace RedditFighterBot
                 return -1;
             }
         }
-
 
         public static List<string> GetFighters(string text)
         {
