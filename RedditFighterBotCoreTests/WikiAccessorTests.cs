@@ -1,6 +1,7 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using RedditFighterBot;
+using RedditFighterBot.Execution;
 using RedditFighterBot.Models;
+using System.Threading.Tasks;
 
 namespace RedditFighterBotCoreTests
 {
@@ -15,9 +16,12 @@ namespace RedditFighterBotCoreTests
         }
 
         [TestMethod()]
-        public void SearchWiki1()
+        public async Task TestSearchWiki_1()
         {
-            WikiSearchResultDTO test = WikiAccessor.SearchWiki("Fabricio Werdum");
+            WikiAccessor wiki = new WikiAccessor();
+
+            WikiSearchResultDTO test = await wiki.SearchWikiForFightersPage("Fabricio Werdum");
+
             Assert.AreEqual("", "");
         }
 

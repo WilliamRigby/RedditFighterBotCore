@@ -1,5 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using RedditFighterBot;
+using RedditFighterBot.Execution;
 using System.Collections.Generic;
 
 namespace RedditFighterBotCoreTests

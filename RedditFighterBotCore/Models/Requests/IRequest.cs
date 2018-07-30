@@ -5,11 +5,10 @@ namespace RedditFighterBot
 {
     public interface IRequest
     {
-        int RequestSize { get; set; }
+        int RequestSize { get; }
 
-        bool IsPartialTable { get; set; }
+        bool IsPartialTable { get; }
 
-        List<string> FighterNames { get; set; }
-
+        List<string> FighterNames { get; }
     }
 }

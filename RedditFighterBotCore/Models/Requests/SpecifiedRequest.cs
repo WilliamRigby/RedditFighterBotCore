@@ -5,18 +5,13 @@ using System.Collections.Generic;
 namespace RedditFighterBot
 {
     public class SpecifiedRequest : IRequest
-    {
-
+    {        
         private const int MAX_ROWS = 50;
-
-        public SpecifiedRequest(List<string> fighters, int request_size)
-        {
-            IsPartialTable = true;
-            FighterNames = fighters;
-            RequestSize = request_size;
-        }
-
         private int _UserRequestedSize;
+
+        public bool IsPartialTable { get; private set; }
+
+        public List<string> FighterNames { get; private set; }
 
         public int RequestSize
         {
@@ -24,7 +19,7 @@ namespace RedditFighterBot
             {
                 return _UserRequestedSize;
             }
-            set
+            private set
             {
                 if (value <= 0)
                 {
@@ -42,9 +37,11 @@ namespace RedditFighterBot
             }
         }
 
-        public bool IsPartialTable { get; set; }
-
-        public List<string> FighterNames { get; set; }
-
+        public SpecifiedRequest(List<string> fighters, int requestSize)
+        {
+            IsPartialTable = true;
+            FighterNames = fighters;
+            RequestSize = requestSize;
+        }
     }
 }

@@ -6,20 +6,24 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
+using System.Threading.Tasks;
 
-namespace RedditFighterBot
+namespace RedditFighterBot.Execution
 {
     public class WikiAccessor
     {
+        private StringBuilder Builder { get; set; }
+        private int RowCount { get; set; }
+        private string FighterType { get; set; }                
 
-        public static StringBuilder Builder { get; set; }
-        public static int RequestSize { get; set; }
-        private static int RowCount { get; set; }
-        private static string FighterType { get; set; }        
+        public WikiAccessor()
+        {            
+            Builder = new StringBuilder();
+        }
 
-        public static WikiSearchResultDTO SearchWiki(string fighter)
+        public async Task<WikiSearchResultDTO> SearchWikiForFightersPage(string fighter)
         {
-            JObject json = CreateWebRequest("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srprop=size&srsearch=" + fighter + " fighter");
+            JObject json = await CreateWebRequest("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srprop=size&srsearch=" + fighter + " fighter");
             
             // get JSON result objects into a list
             JEnumerable<JToken> results = json["query"]["search"].Children();
@@ -79,17 +83,15 @@ namespace RedditFighterBot
             }
         }
 
-        public static int GetIndex(string fighter)
+        public async Task<int> GetIndexOfRecordTableInTableOfContents(string fighter)
         {
-            JToken json = CreateWebRequest("https://en.wikipedia.org/w/api.php?format=json&action=parse&prop=sections&page=" + fighter);
+            JToken json = await CreateWebRequest("https://en.wikipedia.org/w/api.php?format=json&action=parse&prop=sections&page=" + fighter);
             
             JEnumerable<JToken> sections = json["parse"]["sections"].Children();
-
-            // serialize JSON results into .NET objects
+            
             List<WikiTableOfContentDTO> TOC = new List<WikiTableOfContentDTO>();
             foreach (JToken result in sections)
             {
-                // JToken.ToObject is a helper method that uses JsonSerializer internally
                 WikiTableOfContentDTO index = result.ToObject<WikiTableOfContentDTO>();
                 TOC.Add(index);
             }
@@ -100,45 +102,47 @@ namespace RedditFighterBot
         /* this method goes out to the wikipedia api and tries to get the fighter's table
          * on wikipedia the fighter's table is html, but has a consistent formatting  
          * we take advantage of that consistent pattern to be able to parse the table */
-        public static void GetEntireTable(string fighter, int index)
+        public async Task<string> GetEntireTable(int requestSize, string fighter, int index)
         {
             /* keep track of the number of rows which have been created, 
                so that we won't let the comment exceed the reddit limit */
             RowCount = 1;
 
-            HtmlNodeCollection tables = GetHTMLTables(fighter, index);
-            string urlEncodedFighterString = fighter.Replace(' ', '_').Replace("(", "%28").Replace(")", "%29");
-            
+            HtmlNodeCollection tables = await GetHTMLTables(fighter, index);
+            string url = "https://en.wikipedia.org/wiki/" + fighter.Replace(' ', '_').Replace("(", "%28").Replace(")", "%29");
+
             if (tables.Count > 1)
             {   
                 if (FighterType == "mma")
                 {
-                    string url = "https://en.wikipedia.org/wiki/" + urlEncodedFighterString + "#Mixed_martial_arts_record";
+                    url += "#Mixed_martial_arts_record";
                     Builder.Append("###[" + fighter + "](" + url + ")\n\n");
                     GetOverallRecordTable(tables[0]);
                     Builder.Append(" Res. | Record | Opponent | Type | Date | Rd. | Time\n-----|-----|-----|-----|-----|-----|-----|-----");
-                    GetMmaDetailedRecordTable(tables[1]);
+                    GetMmaDetailedRecordTable(requestSize, tables[1]);
                 }
                 else if (FighterType == "boxing")
                 {
-                    string url = "https://en.wikipedia.org/wiki/" + urlEncodedFighterString + "#Professional_boxing_record";
+                    url += "#Professional_boxing_record";
                     Builder.Append("###[" + fighter + "](" + url + ")\n\n");
                     GetOverallRecordTable(tables[0]);
                     Builder.Append(" Res. | Record | Opponent | Type | Rd., Time | Date\n-----|-----|-----|-----|-----|-----");
-                    GetBoxingDetailedRecordTable(tables[1]);
+                    GetBoxingDetailedRecordTable(requestSize, tables[1]);
                 }
             }
             else if (tables.Count == 1)
             {
-                string url = "https://en.wikipedia.org/wiki/" + urlEncodedFighterString + "#Professional_record";
+                url += "#Professional_record";
                 Builder.Append("###[" + fighter + "](" + url + ")\n\n");
-                GetDetailedRecordTableWithTopRecord(tables[0]);
+                GetDetailedRecordTableWithTopRecord(requestSize, tables[0]);
             }
 
             Builder.Append("\n\n");
+            
+            return Builder.ToString();
         }
 
-        private static int ParseTableOfContents(List<WikiTableOfContentDTO> TOC)
+        private int ParseTableOfContents(List<WikiTableOfContentDTO> TOC)
         {
             foreach (WikiTableOfContentDTO section in TOC)
             {
@@ -162,10 +166,10 @@ namespace RedditFighterBot
             return -1;
         }
 
-        private static HtmlNodeCollection GetHTMLTables(string fighter, int index)
+        private async Task<HtmlNodeCollection> GetHTMLTables(string fighter, int index)
         {
             /* this url will direct to the html for the given fighter */
-            JToken json = CreateWebRequest("https://en.wikipedia.org/w/api.php?format=json&action=parse&prop=text&page=" + fighter + "&section=" + index);
+            JToken json = await CreateWebRequest("https://en.wikipedia.org/w/api.php?format=json&action=parse&prop=text&page=" + fighter + "&section=" + index);
             
             /* get the html which describes the table */
             string s = json.SelectToken("parse.text").ToString();
@@ -176,7 +180,7 @@ namespace RedditFighterBot
             return html_table.DocumentNode.SelectNodes("//table");
         }
 
-        private static void GetOverallRecordTable(HtmlNode node)
+        private void GetOverallRecordTable(HtmlNode node)
         {
             string _total = "";
             string _wins = "";
@@ -236,14 +240,13 @@ namespace RedditFighterBot
             RowCount++;
         }
 
-
-        private static void GetBoxingDetailedRecordTable(HtmlNode node)
+        private void GetBoxingDetailedRecordTable(int requestSize, HtmlNode node)
         {
             int cell_count = 1;
 
             foreach (HtmlNode row in node.SelectSingleNode("tbody").SelectNodes("tr"))
             {
-                bool shouldBreakout = BreakoutLogic(RowCount);
+                bool shouldBreakout = BreakoutLogic(requestSize, RowCount);
 
                 if (shouldBreakout == true)
                 {
@@ -315,14 +318,13 @@ namespace RedditFighterBot
             }
         }
 
-
-        private static void GetMmaDetailedRecordTable(HtmlNode node)
+        private void GetMmaDetailedRecordTable(int requestSize, HtmlNode node)
         {
             int cell_count = 1;
 
             foreach (HtmlNode row in node.SelectSingleNode("tbody").SelectNodes("tr"))
             {
-                bool shouldBreakout = BreakoutLogic(RowCount);
+                bool shouldBreakout = BreakoutLogic(requestSize, RowCount);
 
                 if (shouldBreakout == true)
                 {
@@ -400,13 +402,13 @@ namespace RedditFighterBot
             }
         }
 
-        private static void GetDetailedRecordTableWithTopRecord(HtmlNode node)
+        private void GetDetailedRecordTableWithTopRecord(int requestSize, HtmlNode node)
         {
             int cell_count = 1;
 
             foreach (HtmlNode row in node.SelectSingleNode("tbody").SelectNodes("tr"))
             {
-                bool shouldBreakout = BreakoutLogic(RowCount);
+                bool shouldBreakout = BreakoutLogic(requestSize, RowCount);
 
                 if (shouldBreakout == true)
                 {
@@ -489,18 +491,19 @@ namespace RedditFighterBot
             }
         }
 
-        private static JObject CreateWebRequest(string url)
+        private async Task<JObject> CreateWebRequest(string url)
         {
             JObject json = new JObject();
 
             var request = WebRequest.CreateHttp(url);
             request.Method = "GET";
 
-            using (var response = request.GetResponse())
+            using (var response = await request.GetResponseAsync())
             {
                 var stream = response.GetResponseStream();
                 StreamReader reader = new StreamReader(stream);
-                string objResponse = reader.ReadToEnd();
+
+                string objResponse = await reader.ReadToEndAsync();
 
                 json = JObject.Parse(objResponse.ToString());
 
@@ -511,14 +514,14 @@ namespace RedditFighterBot
             return json;
         }
 
-        private static bool BreakoutLogic(int rowCount)
+        private bool BreakoutLogic(int requestSize, int rowCount)
         {
             bool shouldBreakout = false;
 
             /* some fighter's have so many fights that the comment would exceed the limit that reddit imposes */
-            if (RequestSize <= 0)
+            if (requestSize <= 0)
             {
-                if (RequestSize == -999)
+                if (requestSize == -999)
                 {
                     if (rowCount > 150)
                     {
@@ -533,7 +536,7 @@ namespace RedditFighterBot
             }
             else
             {
-                if (rowCount > 150 || rowCount > RequestSize + 2)
+                if (rowCount > 150 || rowCount > requestSize + 2)
                 {
                     shouldBreakout = true;
                 }
@@ -542,7 +545,7 @@ namespace RedditFighterBot
             return shouldBreakout;
         }
 
-        private static string GetNodeInnerText(HtmlNode cell)
+        private string GetNodeInnerText(HtmlNode cell)
         {
             return cell.InnerText.Replace("\\n", "");
         }

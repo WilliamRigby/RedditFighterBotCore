@@ -1,15 +1,13 @@
 ﻿using log4net;
+using Nito.AsyncEx;
+using RedditFighterBot.Execution;
 using RedditFighterBot.Models;
 using RedditSharp;
 using RedditSharp.Things;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 
@@ -18,20 +16,22 @@ namespace RedditFighterBot
 
     public class Bot
     {
-        private static Reddit reddit = null;
-
-        private static TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
-        private static Timer timer = null;
-        private static string clientid = null;
-        private static string secret = null;
-        private static string username = null;
-        private static string password = null;
-        private static string redirect = null;
-        private static readonly bool debug = true;
+        private static Reddit reddit;     
+        private static string clientid;
+        private static string secret;
+        private static string username;
+        private static string password;
+        private static string redirect;
+        private const bool debug = true;
 
         private static ILog logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        
+        static int Main(string[] args)
+        {
+            return AsyncContext.Run(() => MainAsync(args));
+        }
 
-        static void Main(string[] args)
+        static async Task<int> MainAsync(string[] args)
         {
             var logRepo = LogManager.GetRepository(Assembly.GetEntryAssembly());
             log4net.Config.XmlConfigurator.Configure(logRepo, new FileInfo("app.config"));
@@ -40,13 +40,19 @@ namespace RedditFighterBot
 
             try
             {
-                ReadPasswords();
+                await ReadPasswords();
 
-                BotWebAgent bot = new BotWebAgent(username, password, clientid, secret, redirect);
-                bot.RateLimiter = new RateLimitManager() { Mode = RateLimitMode.SmallBurst };
+                BotWebAgent bot = new BotWebAgent(username, password, clientid, secret, redirect)
+                {
+                    RateLimiter = new RateLimitManager() 
+                    { 
+                        Mode = RateLimitMode.SmallBurst 
+                    }
+                };
 
                 reddit = new Reddit(bot, false);
-                reddit.InitOrUpdateUserAsync().Wait();
+
+                await reddit.InitOrUpdateUserAsync();
 
                 LogMessage("Logged in...");
                 LogMessage("About to enter Timer controlled infinite loop");
@@ -54,18 +60,19 @@ namespace RedditFighterBot
             catch (Exception e)
             {
                 LogMessage(e.Message);
-                Environment.Exit(1);
+                return 1;
             }
+            
+            await Loop();
 
-            timer = new Timer(new TimerCallback(InfiniteLoopCallBack), null, 0, 0);
-            System.Threading.Thread.Sleep(Timeout.Infinite);
+            return 0;
         }
 
-        private static void ReadPasswords()
+        private static async Task ReadPasswords()
         {
             try
             {
-                string file = File.ReadAllText(@"passwords.xml");
+                string file = await File.ReadAllTextAsync(@"passwords.xml");
 
                 XmlDocument doc = new XmlDocument();
                 doc.LoadXml(file);
@@ -98,62 +105,63 @@ namespace RedditFighterBot
                     }
                 }
             }
-            catch(Exception e)
+            catch(Exception)
             {
-                throw e;
+                throw;
             }
-        }        
-
-        private static void InfiniteLoopCallBack(object o)
+        }       
+        
+        private static async Task Loop()
         {
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
-
-            try
-            {
-                Listing<Thing> list = reddit.User.GetUnreadMessages();
-
-                using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
+            while(true)
+            {            
+                try
                 {
-                    while (enumerator.MoveNext() != null && enumerator.MoveNext().Result == true)
+                    Listing<Thing> list = reddit.User.GetUnreadMessages();
+
+                    using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
                     {
-                        Thing thing = enumerator.Current;
+                        while (await enumerator.MoveNext() == true)
+                        {
+                            Thing thing = enumerator.Current;
                         
-                        if (thing.Kind == "t4")
-                        {
-                            PrivateMessage pm = ((PrivateMessage)thing);
+                            if (thing.Kind == "t4")
+                            {
+                                PrivateMessage pm = ((PrivateMessage)thing);
 
-                            HandlePrivateMessage(pm);
+                                await HandlePrivateMessage(pm);
+                            }
+                            else if (thing.Kind == "t1")
+                            {
+                                Comment comment = ((Comment)thing);
+
+                                await HandleComment(comment);
+                            }
                         }
-                        else if (thing.Kind == "t1")
-                        {
-                            Comment comment = ((Comment)thing);
+                    }               
+                }
+                catch (Exception e)
+                {
+                    LogMessage(e.Message);
+                }
 
-                            HandleComment(comment);
-                        }
-                    }
-                }               
-            }
-            catch (Exception e)
-            {
-                LogMessage(e.Message);          
-            }
-
-            timer.Change(10000, Timeout.Infinite);
+                await Task.Delay(10000);
+            }            
         }
 
-        private static void HandlePrivateMessage(PrivateMessage pm)
+        private static async Task HandlePrivateMessage(PrivateMessage pm)
         {
-            pm.SetAsReadAsync();
+            await pm.SetAsReadAsync();
 
             LogMessage("Got a PM");
-            LogMessage(pm.Subject + " - " + pm.Body);
+            LogMessage($"Private Message Received{Environment.NewLine}{Environment.NewLine}Subject: {pm.Subject}{Environment.NewLine}{Environment.NewLine}Body: {pm.Body}");
         }
 
-        private static void HandleComment(Comment comment)
+        private static async Task HandleComment(Comment comment)
         {
-            comment.SetAsReadAsync();
+            await comment.SetAsReadAsync();
 
-            LogMessage("Request received: " + comment.Body);
+            LogMessage($"Request received: {comment.Body}");
 
             string request_string = StringUtilities.GetRequestStringFromComment(comment.Body);
 
@@ -161,7 +169,7 @@ namespace RedditFighterBot
             //this implies that this was probably just a regular comment reply, and not a request
             if (request_string == null || request_string == "")
             {
-                LogMessage("request string invalid: " + request_string);
+                LogMessage($"request string invalid: {request_string}");
                 return;
             }
 
@@ -170,10 +178,8 @@ namespace RedditFighterBot
             int request_size = StringUtilities.GetUserRequestSize(request_string);
             request_string = StringUtilities.RemoveNumbers(request_string);
             List<string> fighters = StringUtilities.GetFighters(request_string);
-
-            WikiAccessor.Builder = new StringBuilder();
-
-            var wikiCheckedFighters = GetWikiCheckedFighters(fighters);
+            
+            var wikiCheckedFighters = await GetWikiCheckedFighters(fighters);
 
             //if we threw an exception for every wiki search, and thus we have no wiki pages, then just break out of this garbage request
             if (wikiCheckedFighters.Count == 0)
@@ -183,27 +189,26 @@ namespace RedditFighterBot
 
             IRequest request = GetRequest(wikiCheckedFighters, request_size);
 
-            WikiAccessor.RequestSize = request.RequestSize;
+            string result = await CreateTables(request);
 
-            CreateTables(request);
-
-            if (WikiAccessor.Builder != null && WikiAccessor.Builder.ToString() != "")
+            if (result != string.Empty)
             {
-                SendReply(comment, WikiAccessor.Builder.ToString() + "\n\n^(I am a bot. This post was requested by " + comment.AuthorName + ")\n\n[^(Usage / FAQ)](http://redditfighterbotwebapp.azurewebsites.net/)");
+                SendReply(comment, $"{result}\n\n^(I am a bot. This post was requested by {comment.AuthorName})");
             }
             else
             {
-                LogMessage("Reply attempt failed due to empty StringBuilder");
+                LogMessage("Reply attempt failed due to being unable to find the record section index in the ToC");
             }
         }
 
-        private static List<string> GetWikiCheckedFighters(List<string> fighters)
+        private static async Task<List<string>> GetWikiCheckedFighters(List<string> fighters)
         {
-            var checkedFighters = new List<string>();
+            List<string> checkedFighters = new List<string>();
+            WikiAccessor wikiAccessor = new WikiAccessor();
 
             foreach (string fighter in fighters)
             {
-                WikiSearchResultDTO test = WikiAccessor.SearchWiki(fighter);
+                WikiSearchResultDTO test = await wikiAccessor.SearchWikiForFightersPage(fighter);
 
                 try
                 {
@@ -211,7 +216,8 @@ namespace RedditFighterBot
                 }
                 catch (NullReferenceException ex)
                 {
-                    LogMessage("Null returned from SearchWiki(fighter) for fighter: " + fighter);
+                    LogMessage($"Null returned from SearchWiki(fighter) for fighter: {fighter}");
+
                     LogMessage(ex.Message);
                     continue;
                 }
@@ -232,66 +238,51 @@ namespace RedditFighterBot
             }
         }
 
-        private static void CreateTables(IRequest request)
+        private static async Task<string> CreateTables(IRequest request)
         {
+            WikiAccessor wikiAccessor = new WikiAccessor();
+            string result = string.Empty;
+
             foreach (string fighter in request.FighterNames)
             {
-                int index = WikiAccessor.GetIndex(fighter);
+                int index = await wikiAccessor.GetIndexOfRecordTableInTableOfContents(fighter);
 
                 if (index != -1)
                 {
-                    WikiAccessor.GetEntireTable(fighter, index);
+                    result = await wikiAccessor.GetEntireTable(request.RequestSize, fighter, index);
                 }
             }
+
+            return result;
         }
 
-        private static async void SendReply(Comment comment, string reply)
+        private static async void SendReply(Comment comment, string reply, int attemptCounter = 1)
         {
             try
             {
-                Task<Comment> task = comment.ReplyAsync(reply);
-                task.Wait();
-
-                if(!task.IsFaulted)
-                {
-                    LogMessage("Reply successful!");
-                }
-                else
-                {
-                    throw task.Exception;
-                }                
+                Comment task = await comment.ReplyAsync(reply);
+                LogMessage("Reply successful!");                                
             }
             catch (RateLimitException rate)
             {
-                await HandleRateLimitException(rate, comment, reply);
-            }
-            catch (AggregateException aggregate)
-            {
-                RateLimitException rate = (RateLimitException)aggregate.InnerExceptions.SingleOrDefault(e => e.GetType() == typeof(RateLimitException));
-
-                if(rate != null)
+                if(attemptCounter < 4)
                 {
-                    await HandleRateLimitException(rate, comment, reply);
+                    LogMessage(rate.Message);
+                    await Task.Delay(Convert.ToInt32(rate.TimeToReset.TotalMilliseconds));
+                    SendReply(comment, reply);
                 }
                 else
                 {
-                    LogMessage(aggregate.GetBaseException().Message);
-                }
+                    throw;
+                }                
             }
-        }
-
-        private static async Task HandleRateLimitException(RateLimitException rate, Comment comment, string reply)
-        {
-            LogMessage(rate.Message);
-
-            await Task.Delay(Convert.ToInt32(rate.TimeToReset.TotalMilliseconds));
-
-            SendReply(comment, reply);
-        }
+        }        
 
         private static void LogMessage(string message)
         {
-            logger.Debug(message);
+            var time = DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss");
+
+            logger.Debug($"[{time}]  {message}");
             Console.WriteLine(message);
         }
     }
