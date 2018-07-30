@@ -10,6 +10,7 @@ using RedditFighterBot.Execution;
 using RedditFighterBot.Models;
 using Nito.AsyncEx;
 using log4net;
+using System.Configuration;
 
 namespace RedditFighterBot
 {
@@ -21,16 +22,21 @@ namespace RedditFighterBot
         private static string username;
         private static string password;
         private static string redirect;
-        private const bool debug = true;
-
-        private static ILog logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly bool debug;
+        private static readonly ILog logger;
         
-        static int Main(string[] args)
+        static Bot()
+        {
+            debug = Convert.ToBoolean(ConfigurationManager.AppSettings["isDebugMode"]);
+            logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+        }        
+
+        public static int Main(string[] args)
         {
             return AsyncContext.Run(() => MainAsync(args));
         }
 
-        static async Task<int> MainAsync(string[] args)
+        private static async Task<int> MainAsync(string[] args)
         {
             var logRepo = LogManager.GetRepository(Assembly.GetEntryAssembly());
             log4net.Config.XmlConfigurator.Configure(logRepo, new FileInfo("app.config"));
