@@ -24,10 +24,12 @@ namespace RedditFighterBot
         private static string password;
         private static string redirect;
         private static readonly string debug;
+        private static int delay;
         
         static Bot()
         {
             debug = ConfigurationManager.AppSettings["isDebugMode"];
+            delay = 0;
         }        
 
         public static int Main(string[] args)
@@ -64,7 +66,6 @@ namespace RedditFighterBot
                 return 1;
             }
             
-            await ReplyQueuer.DequeueLoop();
             return await Loop();
         }
 
@@ -83,43 +84,48 @@ namespace RedditFighterBot
             password = node.SelectSingleNode("password").InnerText;
             redirect = node.SelectSingleNode("redirect").InnerText;                
         }       
-        
+
         private static async Task<int> Loop()
         {
             while(true)
-            {            
-                try
-                {
-                    Listing<Thing> list = reddit.User.GetUnreadMessages();
-
-                    using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
-                    {
-                        while (await enumerator.MoveNext() == true)
-                        {
-                            Thing thing = enumerator.Current;
-                        
-                            if (thing.Kind == "t4")
-                            {
-                                PrivateMessage pm = ((PrivateMessage)thing);
-
-                                await HandlePrivateMessage(pm);
-                            }
-                            else if (thing.Kind == "t1")
-                            {
-                                Comment comment = ((Comment)thing);
-
-                                await HandleComment(comment);
-                            }
-                        }
-                    }               
-                }
-                catch (Exception e)
-                {
-                    Logger.LogMessage(e.Message);
-                }
-
-                await Task.Delay(10000);
+            {
+                await GetMessagesToBot();
+                await Task.Delay(delay > 0 ? delay : 10000);                
+                delay = await ReplyQueuer.Dequeue();
             }
+        }
+        
+        private static async Task GetMessagesToBot()
+        {            
+            try
+            {
+                Listing<Thing> list = reddit.User.GetUnreadMessages();
+
+                using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
+                {
+                    while (await enumerator.MoveNext() == true)
+                    {
+                        Thing thing = enumerator.Current;
+                        
+                        if (thing.Kind == "t4")
+                        {
+                            PrivateMessage pm = ((PrivateMessage)thing);
+
+                            await HandlePrivateMessage(pm);
+                        }
+                        else if (thing.Kind == "t1")
+                        {
+                            Comment comment = ((Comment)thing);
+
+                            await HandleComment(comment);
+                        }
+                    }
+                }               
+            }
+            catch (Exception e)
+            {
+                Logger.LogMessage(e.Message);
+            }                        
         }
 
         private static async Task HandlePrivateMessage(PrivateMessage pm)

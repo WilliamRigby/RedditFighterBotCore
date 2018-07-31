@@ -21,17 +21,7 @@ namespace RedditFighterBotCore.Execution
             queue.Enqueue(item);
         }
 
-        public static async Task DequeueLoop()
-        {
-            while(true)
-            {
-                int delay = await Dequeue();
-                
-                await Task.Delay(delay > 0 ? delay : 10000);
-            }            
-        }
-
-        private static async Task<int> Dequeue()
+        public static async Task<int> Dequeue()
         {
             if(queue.Count == 0)
             {
