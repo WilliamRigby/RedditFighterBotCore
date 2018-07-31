@@ -89,43 +89,43 @@ namespace RedditFighterBot
         {
             while(true)
             {
-                await GetMessagesToBot();
-                await Task.Delay(delay > 0 ? delay : 10000);                
-                delay = await ReplyQueuer.Dequeue();
+                try
+                {
+                    await GetMessagesToBot();
+                    await Task.Delay(delay > 0 ? delay : 10000);                
+                    delay = await ReplyQueuer.Dequeue();
+                }               
+                catch (Exception e)
+                {
+                    Logger.LogMessage(e.Message);
+                }
             }
         }
         
         private static async Task GetMessagesToBot()
-        {            
-            try
-            {
-                Listing<Thing> list = reddit.User.GetUnreadMessages();
+        {
+            Listing<Thing> list = reddit.User.GetUnreadMessages();
 
-                using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
+            using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
+            {
+                while (await enumerator.MoveNext() == true)
                 {
-                    while (await enumerator.MoveNext() == true)
-                    {
-                        Thing thing = enumerator.Current;
+                    Thing thing = enumerator.Current;
                         
-                        if (thing.Kind == "t4")
-                        {
-                            PrivateMessage pm = ((PrivateMessage)thing);
+                    if (thing.Kind == "t4")
+                    {
+                        PrivateMessage pm = ((PrivateMessage)thing);
 
-                            await HandlePrivateMessage(pm);
-                        }
-                        else if (thing.Kind == "t1")
-                        {
-                            Comment comment = ((Comment)thing);
-
-                            await HandleComment(comment);
-                        }
+                        await HandlePrivateMessage(pm);
                     }
-                }               
-            }
-            catch (Exception e)
-            {
-                Logger.LogMessage(e.Message);
-            }                        
+                    else if (thing.Kind == "t1")
+                    {
+                        Comment comment = ((Comment)thing);
+
+                        await HandleComment(comment);
+                    }
+                }
+            }                       
         }
 
         private static async Task HandlePrivateMessage(PrivateMessage pm)
