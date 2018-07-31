@@ -9,8 +9,9 @@ using RedditSharp.Things;
 using RedditFighterBot.Execution;
 using RedditFighterBot.Models;
 using Nito.AsyncEx;
-using log4net;
 using System.Configuration;
+using RedditFighterBotCore.Execution;
+using RedditFighterBotCore.Models;
 
 namespace RedditFighterBot
 {
@@ -23,12 +24,10 @@ namespace RedditFighterBot
         private static string password;
         private static string redirect;
         private static readonly string debug;
-        private static readonly ILog logger;
         
         static Bot()
         {
             debug = ConfigurationManager.AppSettings["isDebugMode"];
-            logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         }        
 
         public static int Main(string[] args)
@@ -38,10 +37,7 @@ namespace RedditFighterBot
 
         private static async Task<int> MainAsync(string[] args)
         {
-            var logRepo = LogManager.GetRepository(Assembly.GetEntryAssembly());
-            log4net.Config.XmlConfigurator.Configure(logRepo, new FileInfo("app.config"));
-
-            LogMessage("Application Start");
+            Logger.LogMessage("Application Start");
 
             try
             {
@@ -59,15 +55,16 @@ namespace RedditFighterBot
 
                 await reddit.InitOrUpdateUserAsync();
 
-                LogMessage("Logged in...");
-                LogMessage("About to enter Timer controlled infinite loop");
+                Logger.LogMessage("Logged in...");
+                Logger.LogMessage("About to enter Timer controlled infinite loop");
             }
             catch (Exception e)
             {
-                LogMessage(e.Message);
+                Logger.LogMessage(e.Message);
                 return 1;
             }
             
+            await ReplyQueuer.DequeueLoop();
             return await Loop();
         }
 
@@ -118,7 +115,7 @@ namespace RedditFighterBot
                 }
                 catch (Exception e)
                 {
-                    LogMessage(e.Message);
+                    Logger.LogMessage(e.Message);
                 }
 
                 await Task.Delay(10000);
@@ -129,15 +126,15 @@ namespace RedditFighterBot
         {
             await pm.SetAsReadAsync();
 
-            LogMessage("Got a PM");
-            LogMessage($"Private Message Received{Environment.NewLine}{Environment.NewLine}Subject: {pm.Subject}{Environment.NewLine}{Environment.NewLine}Body: {pm.Body}");
+            Logger.LogMessage("Got a PM");
+            Logger.LogMessage($"Private Message Received{Environment.NewLine}{Environment.NewLine}Subject: {pm.Subject}{Environment.NewLine}{Environment.NewLine}Body: {pm.Body}");
         }
 
         private static async Task HandleComment(Comment comment)
         {
             await comment.SetAsReadAsync();
 
-            LogMessage($"Request received: {comment.Body}");
+            Logger.LogMessage($"Request received: {comment.Body}");
 
             string requestLine = StringUtilities.GetRequestStringFromComment(comment.Body);
 
@@ -168,7 +165,14 @@ namespace RedditFighterBot
 
             if (result != string.Empty)
             {
-                SendReply(comment, $"{result}\n\n^(I am a bot. This post was requested by {comment.AuthorName})");
+                ReplyQueueItem item = new ReplyQueueItem
+                {
+                    Comment = comment,
+                    Reply = $"{result}\n\n^(I am a bot. This post was requested by {comment.AuthorName})",
+                    Attempts = 0
+                };
+
+                ReplyQueuer.EnqueueItem(item);
             }
             else
             {
@@ -191,8 +195,8 @@ namespace RedditFighterBot
                 }
                 catch (NullReferenceException ex)
                 {
-                    LogMessage($"Null returned from SearchWiki(fighter) for fighter: {fighter}");
-                    LogMessage(ex.Message);
+                    Logger.LogMessage($"Null returned from SearchWiki(fighter) for fighter: {fighter}");
+                    Logger.LogMessage(ex.Message);
                     continue;
                 }
             }
@@ -228,36 +232,6 @@ namespace RedditFighterBot
             }
 
             return result;
-        }
-
-        private static async void SendReply(Comment comment, string reply, int attemptCounter = 1)
-        {
-            try
-            {
-                Comment task = await comment.ReplyAsync(reply);
-                LogMessage("Reply successful!");                                
-            }
-            catch (RateLimitException rate)
-            {
-                if(attemptCounter < 4)
-                {
-                    LogMessage(rate.Message);
-                    await Task.Delay(Convert.ToInt32(rate.TimeToReset.TotalMilliseconds));
-                    SendReply(comment, reply, ++attemptCounter);
-                }
-                else
-                {
-                    throw;
-                }                
-            }
-        }        
-
-        private static void LogMessage(string message)
-        {
-            var time = DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss");
-
-            logger.Debug($"[{time}]  {message}");
-            Console.WriteLine(message);
-        }
+        }             
     }
 }
