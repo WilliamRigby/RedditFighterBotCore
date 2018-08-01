@@ -23,21 +23,20 @@ namespace RedditFighterBot
         private static string username;
         private static string password;
         private static string redirect;
+        private static int delay = 0;
         private static readonly string debug;
-        private static int delay;
         
         static Bot()
         {
             debug = ConfigurationManager.AppSettings["isDebugMode"];
-            delay = 0;
         }        
 
-        public static int Main(string[] args)
+        public static void Main()
         {
-            return AsyncContext.Run(() => MainAsync(args));
+            AsyncContext.Run(() => MainAsync());
         }
 
-        private static async Task<int> MainAsync(string[] args)
+        private static async Task MainAsync()
         {
             Logger.LogMessage("Application Start");
 
@@ -63,10 +62,10 @@ namespace RedditFighterBot
             catch (Exception e)
             {
                 Logger.LogMessage(e.Message);
-                return 1;
+                return;
             }
             
-            return await Loop();
+            await Loop();
         }
 
         private static async Task ReadPasswords()
@@ -76,7 +75,7 @@ namespace RedditFighterBot
             XmlDocument doc = new XmlDocument();
             doc.LoadXml(file);
 
-            XmlNode node = doc.SelectSingleNode($"/config/accounts/account[@debug={debug}]");
+            XmlNode node = doc.SelectSingleNode($"/config/accounts/account[@debug=\"{debug}\"]");
 
             username = node.SelectSingleNode("username").InnerText;
             clientid = node.SelectSingleNode("clientid").InnerText;
@@ -84,26 +83,26 @@ namespace RedditFighterBot
             password = node.SelectSingleNode("password").InnerText;
             redirect = node.SelectSingleNode("redirect").InnerText;                
         }       
-
-        private static async Task<int> Loop()
+        
+        private static async Task Loop()
         {
             while(true)
             {
                 try
                 {
-                    await GetMessagesToBot();
-                    await Task.Delay(delay > 0 ? delay : 10000);                
-                    delay = await ReplyQueuer.Dequeue();
-                }               
-                catch (Exception e)
+                    await GetBotMessages();
+                    await Task.Delay(delay + 5000);
+                    delay = await ReplyQueuer.AttemptReply(); 
+                }
+                catch(Exception e)
                 {
                     Logger.LogMessage(e.Message);
                 }
             }
         }
-        
-        private static async Task GetMessagesToBot()
-        {
+
+        private static async Task GetBotMessages()
+        {        
             Listing<Thing> list = reddit.User.GetUnreadMessages();
 
             using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
@@ -125,7 +124,7 @@ namespace RedditFighterBot
                         await HandleComment(comment);
                     }
                 }
-            }                       
+            }
         }
 
         private static async Task HandlePrivateMessage(PrivateMessage pm)
@@ -238,6 +237,6 @@ namespace RedditFighterBot
             }
 
             return result;
-        }             
+        }              
     }
 }

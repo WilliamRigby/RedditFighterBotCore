@@ -21,19 +21,17 @@ namespace RedditFighterBotCore.Execution
             queue.Enqueue(item);
         }
 
-        public static async Task<int> Dequeue()
+        public static async Task<int> AttemptReply()
         {
             if(queue.Count == 0)
             {
                 return 0;
             }
             
-            int delay = await AttemptReply(queue.Peek());
-
-            return delay;
+            return await Dequeue(queue.Peek());            
         }
 
-        private static async Task<int> AttemptReply(ReplyQueueItem item)
+        private static async Task<int> Dequeue(ReplyQueueItem item)
         {
             int delay = 0;
 
@@ -41,6 +39,7 @@ namespace RedditFighterBotCore.Execution
             {
                 Comment comment = await item.Comment.ReplyAsync(item.Reply);
                 Logger.LogMessage("Reply successful!");
+                queue.Dequeue();
             }
             catch(RateLimitException rate)
             {

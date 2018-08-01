@@ -40,7 +40,7 @@ namespace RedditFighterBot.Execution
 
         private WikiSearchResultDTO PickSearchResult(string fighter, List<WikiSearchResultDTO> searchResults)
         {
-            if (searchResults.Count > 0)
+            if (searchResults.Count == 0)
             {
                 return null;
             }
