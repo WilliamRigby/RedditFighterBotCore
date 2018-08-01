@@ -38,7 +38,7 @@ namespace RedditFighterBotCore.Execution
             try
             {
                 Comment comment = await item.Comment.ReplyAsync(item.Reply);
-                Logger.LogMessage("Reply successful!");
+                Logger.LogMessage($"Reply sent for request: {item.RequestLine}");
                 queue.Dequeue();
             }
             catch(RateLimitException rate)
@@ -51,8 +51,14 @@ namespace RedditFighterBotCore.Execution
                 }
                 else
                 {
-                    queue.Dequeue(); // if it's failed more than 3 times, throw it away
+                    queue.Dequeue();
+                    Logger.LogMessage($"Threw away request: {item.RequestLine}{Environment.NewLine}{rate.StackTrace}");
                 }
+            }
+            catch(Exception e)
+            {
+                queue.Dequeue();
+                Logger.LogMessage($"Threw away request: {item.RequestLine}{Environment.NewLine}{e.StackTrace}");
             }
 
             return delay;

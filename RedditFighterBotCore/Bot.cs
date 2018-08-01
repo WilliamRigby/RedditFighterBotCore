@@ -38,8 +38,6 @@ namespace RedditFighterBot
 
         private static async Task MainAsync()
         {
-            Logger.LogMessage("Application Start");
-
             try
             {
                 await ReadPasswords();
@@ -57,11 +55,10 @@ namespace RedditFighterBot
                 await reddit.InitOrUpdateUserAsync();
 
                 Logger.LogMessage("Logged in...");
-                Logger.LogMessage("About to enter Timer controlled infinite loop");
             }
             catch (Exception e)
             {
-                Logger.LogMessage(e.Message);
+                Logger.LogMessage(e.StackTrace);
                 return;
             }
             
@@ -90,20 +87,29 @@ namespace RedditFighterBot
             {
                 try
                 {
-                    await GetBotMessages();
+                    ReplyQueueItem item = await GetBotMessages();
+
+                    if(item != null)
+                    {
+                        ReplyQueuer.EnqueueItem(item);
+                    }                    
+
+                    delay = await ReplyQueuer.AttemptReply();                     
+
                     await Task.Delay(delay + 5000);
-                    delay = await ReplyQueuer.AttemptReply(); 
                 }
                 catch(Exception e)
                 {
-                    Logger.LogMessage(e.Message);
+                    Logger.LogMessage(e.StackTrace);
                 }
             }
         }
 
-        private static async Task GetBotMessages()
+        private static async Task<ReplyQueueItem> GetBotMessages()
         {        
             Listing<Thing> list = reddit.User.GetUnreadMessages();
+
+            ReplyQueueItem item = null;
 
             using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
             {
@@ -121,36 +127,35 @@ namespace RedditFighterBot
                     {
                         Comment comment = ((Comment)thing);
 
-                        await HandleComment(comment);
+                        item = await HandleComment(comment);
                     }
                 }
             }
+
+            return item;
         }
 
         private static async Task HandlePrivateMessage(PrivateMessage pm)
         {
             await pm.SetAsReadAsync();
-
-            Logger.LogMessage("Got a PM");
+            
             Logger.LogMessage($"Private Message Received{Environment.NewLine}{Environment.NewLine}Subject: {pm.Subject}{Environment.NewLine}{Environment.NewLine}Body: {pm.Body}");
         }
 
-        private static async Task HandleComment(Comment comment)
+        private static async Task<ReplyQueueItem> HandleComment(Comment comment)
         {
-            await comment.SetAsReadAsync();
+            await comment.SetAsReadAsync();            
 
-            Logger.LogMessage($"Request received: {comment.Body}");
-
-            string requestLine = StringUtilities.GetRequestStringFromComment(comment.Body);
+            string original = StringUtilities.GetRequestStringFromComment(comment.Body);
 
             //if we cannot find a line of the comment that contains the bot's name, then continue
             //this implies that this was probably just a regular comment reply, and not a request
-            if (requestLine == null || requestLine == "")
+            if (original == null || original == "")
             {
-                throw new Exception($"request string invalid: {requestLine}");
+                throw new Exception($"request string invalid: {original}");
             }
 
-            requestLine = StringUtilities.RemoveBotName(requestLine.ToLower(), username.ToLower());
+            string requestLine = StringUtilities.RemoveBotName(original.ToLower(), username.ToLower());
             requestLine = StringUtilities.RemoveRESUpvoteNumbers(requestLine);
             int requestSize = StringUtilities.GetUserRequestSize(requestLine);
             requestLine = StringUtilities.RemoveNumbers(requestLine);
@@ -168,21 +173,23 @@ namespace RedditFighterBot
 
             string result = await CreateTables(request);
 
+            ReplyQueueItem item = null;
             if (result != string.Empty)
             {
-                ReplyQueueItem item = new ReplyQueueItem
+                item = new ReplyQueueItem
                 {
                     Comment = comment,
+                    RequestLine = original,
                     Reply = $"{result}\n\n^(I am a bot. This post was requested by {comment.AuthorName})",
                     Attempts = 0
-                };
-
-                ReplyQueuer.EnqueueItem(item);
+                };                
             }
             else
             {
                 throw new Exception("Reply attempt failed due to being unable to find the record section index in the ToC");
             }
+
+            return item;
         }
 
         private static async Task<List<string>> GetWikiCheckedFighters(List<string> fighters)
@@ -200,8 +207,7 @@ namespace RedditFighterBot
                 }
                 catch (NullReferenceException ex)
                 {
-                    Logger.LogMessage($"Null returned from SearchWiki(fighter) for fighter: {fighter}");
-                    Logger.LogMessage(ex.Message);
+                    Logger.LogMessage($"Null returned from SearchWiki(fighter) for fighter: {fighter}{Environment.NewLine}{ex.StackTrace}");
                     continue;
                 }
             }
