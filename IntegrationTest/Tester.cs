@@ -1,4 +1,5 @@
-﻿using Nito.AsyncEx;
+﻿using IntegrationTest.Models;
+using Nito.AsyncEx;
 using RedditSharp;
 using RedditSharp.Things;
 using System;
@@ -25,7 +26,7 @@ namespace IntegrationTest
 
         private static async Task MainAsync()
         {
-            Reddit reddit = await Authenticate();                        
+            Reddit reddit = await Authenticate(); 
 
             Post post = await GetPostAsync(reddit);
 
@@ -46,7 +47,14 @@ namespace IntegrationTest
                 }
             };
 
-            return new Reddit(bot, false);
+
+            Reddit reddit = new Reddit(bot, false);
+
+            await reddit.InitOrUpdateUserAsync();
+
+            Console.WriteLine("Logged in...");
+
+            return reddit;
         }
 
         private static async Task ReadPasswords()
@@ -97,9 +105,22 @@ namespace IntegrationTest
 
         private static async Task SendComments(Post post, List<string> comments)
         {
-            foreach(string comment in comments)
+            foreach (string comment in comments)
             {
-                await post.CommentAsync(comment);
+
+                ReplyQueueItem item = new ReplyQueueItem
+                {
+                    Reply = comment,
+                    Attempts = 0
+                };
+
+                ReplyQueuer.EnqueueItem(item);
+            }
+
+            int delay = 0;
+            while(delay != -1)
+            {
+                delay = await ReplyQueuer.AttemptAllReply(post);
             }
         }
     }
