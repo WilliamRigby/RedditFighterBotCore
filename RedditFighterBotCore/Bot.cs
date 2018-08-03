@@ -87,29 +87,29 @@ namespace RedditFighterBot
             {
                 try
                 {
-                    ReplyQueueItem item = await GetBotMessages();
+                    List<ReplyQueueItem> items = await GetBotMessages();
 
-                    if(item != null)
+                    if(items.Count != 0)
                     {
-                        ReplyQueuer.EnqueueItem(item);
+                        ReplyQueuer.EnqueueItems(items);
                     }                    
 
                     delay = await ReplyQueuer.AttemptReply();                     
 
-                    await Task.Delay(delay + 5000);
+                    await Task.Delay((delay == 0) ? 10000: delay + 5000);
                 }
                 catch(Exception e)
                 {
-                    Logger.LogMessage(e.StackTrace);
+                    Logger.LogMessage($"{e.Message}{Environment.NewLine}{e.StackTrace}");
                 }
             }
         }
 
-        private static async Task<ReplyQueueItem> GetBotMessages()
+        private static async Task<List<ReplyQueueItem>> GetBotMessages()
         {        
             Listing<Thing> list = reddit.User.GetUnreadMessages();
 
-            ReplyQueueItem item = null;
+            List<ReplyQueueItem> items = new List<ReplyQueueItem>();
 
             using(IAsyncEnumerator<Thing> enumerator = list.GetEnumerator())
             {
@@ -127,12 +127,14 @@ namespace RedditFighterBot
                     {
                         Comment comment = ((Comment)thing);
 
-                        item = await HandleComment(comment);
+                        ReplyQueueItem item = await HandleComment(comment);
+
+                        items.Add(item);
                     }
                 }
             }
 
-            return item;
+            return items;
         }
 
         private static async Task HandlePrivateMessage(PrivateMessage pm)

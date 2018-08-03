@@ -22,7 +22,7 @@ New-SSHSession -ComputerName $ip -Credential $Credentials -KeyFile "Z:\pi_keys\
 Invoke-SSHCommand -Index 0 -Command "screen -X -S monitor quit"
 Invoke-SSHCommand -Index 0 -Command "rm -rf /home/pi/bot/publish/*"
 Invoke-SSHCommand -Index 0 -Command "rm /home/pi/bot/passwords.xml"
-
+Invoke-SSHCommand -Index 0 -Command "rm /home/pi/bot/app.config"
 
 # Send each file in the local build folder to the publish folder on the pi
 New-SFTPSession -ComputerName $ip -Credential $Credentials -KeyFile "Z:\pi_keys\pi2.ppk"
@@ -38,6 +38,10 @@ For($i = 0; $i -lt $files.Length; $i++) {
 }
 
 $FullFileNamePath = -join($ScriptPath, "\RedditFighterBotCore\passwords.xml")
+
+Set-SFTPFile -SessionId 0 -LocalFile $FullFileNamePath -RemotePath "/home/pi/bot/"
+
+$FullFileNamePath = -join($ScriptPath, "\RedditFighterBotCore\app.config")
 
 Set-SFTPFile -SessionId 0 -LocalFile $FullFileNamePath -RemotePath "/home/pi/bot/"
 

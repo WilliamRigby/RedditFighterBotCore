@@ -16,9 +16,12 @@ namespace RedditFighterBotCore.Execution
             queue = new Queue<ReplyQueueItem>();              
         }
 
-        public static void EnqueueItem(ReplyQueueItem item)
+        public static void EnqueueItems(List<ReplyQueueItem> items)
         {
-            queue.Enqueue(item);
+            foreach(var item in items)
+            {
+                queue.Enqueue(item);
+            }            
         }
 
         public static async Task<int> AttemptReply()
