@@ -129,7 +129,10 @@ namespace RedditFighterBot
 
                         ReplyQueueItem item = await HandleComment(comment);
 
-                        items.Add(item);
+                        if(item != null)
+                        {
+                            items.Add(item);
+                        }                        
                     }
                 }
             }
@@ -154,7 +157,7 @@ namespace RedditFighterBot
             //this implies that this was probably just a regular comment reply, and not a request
             if (original == null || original == "")
             {
-                throw new Exception($"request string invalid: {original}");
+                return null;
             }
 
             string requestLine = StringUtilities.RemoveBotName(original.ToLower(), username.ToLower());

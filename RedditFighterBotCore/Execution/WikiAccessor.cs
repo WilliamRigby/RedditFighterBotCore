@@ -51,6 +51,18 @@ namespace RedditFighterBot.Execution
                 {
                     result.LevenshteinDistance = StringUtilities.LevenshteinDistance(($"{fighter.ToLower()} (fighter)").ToCharArray(), result.title.ToLower().ToCharArray());
                 }
+                else if(result.title.ToLower().Contains("(boxer)"))
+                {
+                    result.LevenshteinDistance = StringUtilities.LevenshteinDistance(($"{fighter.ToLower()} (boxer)").ToCharArray(), result.title.ToLower().ToCharArray());
+                }
+                else if (result.title.ToLower().Contains("(grappler)"))
+                {
+                    result.LevenshteinDistance = StringUtilities.LevenshteinDistance(($"{fighter.ToLower()} (grappler)").ToCharArray(), result.title.ToLower().ToCharArray());
+                }
+                else if (result.title.ToLower().Contains("(wrestler)"))
+                {
+                    result.LevenshteinDistance = StringUtilities.LevenshteinDistance(($"{fighter.ToLower()} (wrestler)").ToCharArray(), result.title.ToLower().ToCharArray());
+                }
                 else
                 {
                     result.LevenshteinDistance = StringUtilities.LevenshteinDistance(fighter.ToLower().ToCharArray(), result.title.ToLower().ToCharArray());
@@ -58,16 +70,21 @@ namespace RedditFighterBot.Execution
             }
 
             searchResults.Sort((x, y) => x.LevenshteinDistance.CompareTo(y.LevenshteinDistance));
-
-            int shortestDistance = 0;
-
+            
             List<WikiSearchResultDTO> ties = new List<WikiSearchResultDTO>();
 
-            for (int i = 0; i < searchResults.Count; i++)
-            {
-                if (i == 0) { shortestDistance = searchResults[i].LevenshteinDistance; }
+            int shortestDistance = searchResults[0].LevenshteinDistance;
+            ties.Add(searchResults[0]);
 
-                if (searchResults[i].LevenshteinDistance == shortestDistance)
+            for (int i = 1; i < searchResults.Count; i++)
+            {
+                if (searchResults[i].LevenshteinDistance < shortestDistance)
+                {
+                    ties.RemoveAll(t => true);
+                    ties.Add(searchResults[i]);
+                    shortestDistance = searchResults[i].LevenshteinDistance;
+                }
+                else if(searchResults[i].LevenshteinDistance == shortestDistance)
                 {
                     ties.Add(searchResults[i]);
                 }
