@@ -90,9 +90,14 @@ namespace RedditFighterBot.Execution
                 }
             }
 
+            if(shortestDistance > 5)
+            {
+                return null;
+            }
+
             for (int i = 0; i < ties.Count; i++)
             {
-                if (ties[i].title.Contains("(fighter)"))
+                if (ties[i].title.Contains("(fighter)") || ties[i].title.Contains("(boxer)") || ties[i].title.Contains("(grappler)") || ties[i].title.Contains("(wrestler)"))
                 {
                     return ties[i];
                 }
